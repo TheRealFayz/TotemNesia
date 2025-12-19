@@ -9,6 +9,8 @@ TotemNesia helps Shamans efficiently manage their totems by providing a clickabl
 - **Smart Totem Detection** - Only shows notifications when you actually have totems deployed
 - **Clickable Interface** - Click the message to instantly recall all totems with Totemic Recall
 - **Combat-Aware** - Automatically hides when you re-enter combat
+- **Countdown Timer** - 15-second countdown shows how long you have before the window closes
+- **Audio Notification** - Optional sound alert when the message appears (custom MP3 support)
 - **Customizable Position** - Drag and lock the message frame anywhere on your screen
 - **Debug Mode** - Toggle detailed logging for troubleshooting
 
@@ -33,11 +35,14 @@ TotemNesia helps Shamans efficiently manage their totems by providing a clickabl
 
 | Command | Description |
 |---------|-------------|
-| `/tn` | Display help and list of commands |
-| `/tn unlock` | Unlock the message frame for repositioning |
-| `/tn lock` | Lock the frame in place |
+| `/tn` | Display help and list of commands with current status |
+| `/tn lock` | Lock the message frame in place |
+| `/tn unlock` | Unlock message frame for repositioning |
+| `/tn mute` | Mute the audio notification |
+| `/tn unmute` | Unmute the audio notification |
 | `/tn test` | Test the notification display |
 | `/tn debug` | Toggle debug messages on/off |
+
 
 ## Usage Tips
 
@@ -46,6 +51,23 @@ TotemNesia helps Shamans efficiently manage their totems by providing a clickabl
 2. Drag the message window to your preferred location
 3. Type `/tn lock` to lock it in place
 4. The frame will remember its position
+
+### Positioning the Frame
+- When **unlocked**: The frame has 100% opacity and can be dragged anywhere on screen
+- When **locked**: The frame has 25% transparency and is clickable to cast Totemic Recall
+- The lock state is preserved between sessions
+
+### Audio Notifications
+- By default, audio notifications are enabled
+- Use `/tn mute` to disable the sound
+- Use `/tn unmute` to re-enable and hear a test sound
+- Audio state is preserved between sessions
+
+### Custom Audio
+To use your own custom sound file:
+1. Place your MP3 file in `TotemNesia\Sounds\notification.mp3`
+2. **Important**: You must completely exit WoW and restart for custom sounds to be recognized
+3. WoW caches available sound files at startup, so `/reload` is not sufficient
 
 ### Debug Mode
 Enable debug mode with `/tn debug` to see detailed information about:
@@ -70,6 +92,23 @@ The addon tracks totems through the combat log (`CHAT_MSG_SPELL_SELF_BUFF` event
 - You click to recall totems
 - You leave combat without having cast any totems
 - Totemic Recall is successfully cast
+
+### Positioning the Frame
+- When **unlocked**: The frame has 100% opacity and can be dragged anywhere on screen
+- When **locked**: The frame has 25% transparency and is clickable to cast Totemic Recall
+- The lock state is preserved between sessions
+
+### Audio Notifications
+- By default, audio notifications are enabled
+- Use `/tn mute` to disable the sound
+- Use `/tn unmute` to re-enable and hear a test sound
+- Audio state is preserved between sessions
+
+### Custom Audio
+To use your own custom sound file:
+1. Place your MP3 file in `TotemNesia\Sounds\notification.mp3`
+2. **Important**: You must completely exit WoW and restart for custom sounds to be recognized
+3. WoW caches available sound files at startup, so `/reload` is not sufficient
 
 ### Compatibility
 - **Client Version**: Turtle WoW (1.18.0)
@@ -98,10 +137,39 @@ The addon tracks totems through the combat log (`CHAT_MSG_SPELL_SELF_BUFF` event
 - Make sure you're dragging from the frame itself, not just near it
 - Try `/reload` if the frame seems stuck
 
+### Positioning the Frame
+- When **unlocked**: The frame has 100% opacity and can be dragged anywhere on screen
+- When **locked**: The frame has 25% transparency and is clickable to cast Totemic Recall
+- The lock state is preserved between sessions
+
+### Audio Notifications
+- By default, audio notifications are enabled
+- Use `/tn mute` to disable the sound
+- Use `/tn unmute` to re-enable and hear a test sound
+- Audio state is preserved between sessions
+
+### Custom Audio
+To use your own custom sound file:
+1. Place your MP3 file in `TotemNesia\Sounds\notification.mp3`
+2. **Important**: You must completely exit WoW and restart for custom sounds to be recognized
+3. WoW caches available sound files at startup, so `/reload` is not sufficient
+
+
 ## Version History
 
+### v2.1 - Current Release
+- Added a timer for the recall window
+- Added an audio queue to  pair with the recall window
+- Added audio options to /tn
+- Cleaned up the /tn menu to be more usable
+- Cleaned up codebase and removed experimental features
+- Streamlined debug messages for better performance
+- Optimized totem detection to only listen to necessary combat log events
+- Improved code readability and maintainability
+- Bug fixes and stability improvements
+
 ### v2.0 - Current Release
-- Complete overhaul with clickable UI system
+- Complete overhaul with a clickable UI system
 - Smart totem detection via combat log parsing
 - Enhanced combat state handling
 - Debug mode toggle
