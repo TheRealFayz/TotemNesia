@@ -168,7 +168,7 @@ To use your own custom sound file:
 - Improved code readability and maintainability
 - Bug fixes and stability improvements
 
-### v2.0 - Current Release
+### v2.0 - Major Overhaul
 - Complete overhaul with a clickable UI system
 - Smart totem detection via combat log parsing
 - Enhanced combat state handling
