@@ -1,3 +1,4 @@
+-- TotemNesia.lua
 -- TotemNesia: Because Shamans always forget their totems
 -- Reminds Shamans to destroy totems after combat
 
@@ -33,11 +34,19 @@ frame:SetScript("OnEvent", function()
         text:Hide()
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- Left combat
-        if wasInCombat and HasActiveTotems() and not reminderShown then
+        if wasInCombat and HasActiveTotems() then
+            -- Automatically destroy all totems
+            DestroyTotem(1) -- Fire totem
+            DestroyTotem(2) -- Earth totem
+            DestroyTotem(3) -- Water totem
+            DestroyTotem(4) -- Air totem
+            
+            -- Show confirmation message
+            text:SetText("TOTEMS DESTROYED!")
             text:Show()
             reminderShown = true
-            -- Auto-hide after 5 seconds
-            frame.hideTimer = 5
+            -- Auto-hide after 2 seconds
+            frame.hideTimer = 2
         end
     elseif event == "PLAYER_TOTEM_UPDATE" then
         -- Check if all totems are gone
@@ -64,4 +73,4 @@ frame:RegisterEvent("PLAYER_REGEN_DISABLED") -- Entering combat
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Leaving combat
 frame:RegisterEvent("PLAYER_TOTEM_UPDATE")   -- Totem changes
 
-DEFAULT_CHAT_FRAME:AddMessage("TotemNesia loaded! You'll never forget your totems again.")
+DEFAULT_CHAT_FRAME:AddMessage("TotemNesia loaded! Your totems will be auto-destroyed after combat.")
