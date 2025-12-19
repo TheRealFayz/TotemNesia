@@ -7,11 +7,12 @@ TotemNesia.inCombat = false
 TotemNesia.isLocked = true
 TotemNesia.hasTotems = false
 TotemNesia.debugMode = false
+TotemNesia.audioEnabled = true
 
 -- Create the message frame
 local messageFrame = CreateFrame("Button", "TotemNesiaMessageFrame", UIParent)
 messageFrame:SetWidth(300)
-messageFrame:SetHeight(50)
+messageFrame:SetHeight(80)
 messageFrame:SetPoint("CENTER", 0, 200)
 messageFrame:SetMovable(true)
 messageFrame:SetUserPlaced(true)
@@ -31,10 +32,17 @@ messageFrame:SetBackdropColor(0, 0, 0, 0.25)
 
 -- Create the text
 local messageText = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-messageText:SetPoint("CENTER", messageFrame, "CENTER", 0, 0)
+messageText:SetPoint("CENTER", messageFrame, "CENTER", 0, 10)
 messageText:SetFont("Fonts\\FRIZQT__.TTF", 30, "OUTLINE")
 messageText:SetText("Click to recall totems")
 messageText:SetTextColor(1, 0.82, 0)
+
+-- Create the timer text
+local timerText = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+timerText:SetPoint("CENTER", messageFrame, "CENTER", 0, -15)
+timerText:SetFont("Fonts\\FRIZQT__.TTF", 20, "OUTLINE")
+timerText:SetText("")
+timerText:SetTextColor(1, 1, 1)
 
 -- Make frame draggable and clickable
 messageFrame:RegisterForDrag("LeftButton")
@@ -46,57 +54,6 @@ end)
 messageFrame:SetScript("OnDragStop", function()
     this:StopMovingOrSizing()
 end)
-
--- Make frame clickable to recall totems
-messageFrame:SetScript("OnClick", function()
-    TotemNesia.DebugPrint("Frame clicked!")
-    TotemNesia.DebugPrint("isLocked = " .. tostring(TotemNesia.isLocked))
-    TotemNesia.DebugPrint("isVisible = " .. tostring(messageFrame:IsVisible()))
-    
-    if TotemNesia.isLocked and messageFrame:IsVisible() then
-        TotemNesia.DebugPrint("Searching for spell...")
-        -- Cast Totemic Recall
-        local i = 1
-        while true do
-            local spellName, spellRank = GetSpellName(i, BOOKTYPE_SPELL)
-            if not spellName then
-                TotemNesia.DebugPrint("Reached end of spellbook")
-                break
-            end
-            if spellName == "Totemic Recall" then
-                TotemNesia.DebugPrint("Found spell at index " .. i .. ", casting...")
-                CastSpell(i, BOOKTYPE_SPELL)
-                messageFrame:Hide()
-                TotemNesia.displayTimer = nil
-                TotemNesia.hasTotems = false  -- Reset totem flag after recalling
-                TotemNesia.DebugPrint("Totem flag reset to: " .. tostring(TotemNesia.hasTotems))
-                DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Totems recalled!")
-                break
-            end
-            i = i + 1
-        end
-    else
-        TotemNesia.DebugPrint("Conditions not met for casting")
-    end
-end)
-
--- Function to toggle lock state
-function TotemNesia.ToggleLock()
-    TotemNesia.isLocked = not TotemNesia.isLocked
-    
-    if TotemNesia.isLocked then
-        -- Locked state: 25% transparency
-        messageFrame:SetBackdropColor(0, 0, 0, 0.25)
-        messageFrame:RegisterForClicks("LeftButtonUp")
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame locked.")
-    else
-        -- Unlocked state: no transparency
-        messageFrame:SetBackdropColor(0, 0, 0, 1)
-        messageFrame:RegisterForClicks()
-        messageFrame:Show() -- Show frame so it can be positioned
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame unlocked. Drag to reposition.")
-    end
-end
 
 -- Debug print function
 function TotemNesia.DebugPrint(msg)
@@ -116,69 +73,58 @@ local function HasTotemsOut()
     return TotemNesia.hasTotems
 end
 
--- Combat log parser to track totem summons and deaths
+-- Combat log parser to track totem summons
 local combatFrame = CreateFrame("Frame")
 combatFrame:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF")
-combatFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE")
-combatFrame:RegisterEvent("CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE")
-combatFrame:RegisterEvent("CHAT_MSG_SPELL_DAMAGESHIELDS_ON_SELF")
 combatFrame:SetScript("OnEvent", function()
     if event == "CHAT_MSG_SPELL_SELF_BUFF" then
         -- Check if message contains "Totem" but NOT "Totemic Recall"
         if string.find(arg1, "Totem") and not string.find(arg1, "Totemic Recall") then
             TotemNesia.hasTotems = true
-            TotemNesia.DebugPrint("Totem summoned - flag set to true")
-        end
-    elseif event == "CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE" or 
-           event == "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE" or
-           event == "CHAT_MSG_SPELL_DAMAGESHIELDS_ON_SELF" then
-        -- Check if a totem died
-        if string.find(arg1, "Totem") and (string.find(arg1, "dies") or string.find(arg1, "is destroyed")) then
-            TotemNesia.DebugPrint("Totem destroyed message detected")
+            TotemNesia.DebugPrint("Totem summoned")
         end
     end
 end)
 
--- Function to recall totems
-local function RecallTotems()
-    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Recalling totems...")
+-- Make frame clickable to recall totems
+messageFrame:SetScript("OnClick", function()
+    TotemNesia.DebugPrint("Frame clicked")
     
-    -- Find and cast Totemic Recall
-    local i = 1
-    while true do
-        local spellName, spellRank = GetSpellName(i, BOOKTYPE_SPELL)
-        if not spellName then
-            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Spell not found in spellbook")
-            break
-        end
-        if spellName == "Totemic Recall" then
-            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Found spell, casting...")
-            CastSpell(i, BOOKTYPE_SPELL)
-            break
-        end
-        i = i + 1
-    end
-    
-    -- Show message
-    messageFrame:Show()
-    messageFrame:SetAlpha(1)
-    
-    -- Fade out animation
-    local fadeTime = 0
-    messageFrame:SetScript("OnUpdate", function()
-        fadeTime = fadeTime + arg1
-        if fadeTime >= 1.5 then
-            local alpha = 1 - ((fadeTime - 1.5) / 1.5)
-            if alpha <= 0 then
-                if TotemNesia.isLocked then
-                    messageFrame:Hide()
-                end
-                messageFrame:SetScript("OnUpdate", nil)
-            else
-                messageFrame:SetAlpha(alpha)
+    if TotemNesia.isLocked and messageFrame:IsVisible() then
+        -- Cast Totemic Recall
+        local i = 1
+        while true do
+            local spellName, spellRank = GetSpellName(i, BOOKTYPE_SPELL)
+            if not spellName then
+                break
             end
+            if spellName == "Totemic Recall" then
+                CastSpell(i, BOOKTYPE_SPELL)
+                messageFrame:Hide()
+                TotemNesia.displayTimer = nil
+                TotemNesia.hasTotems = false
+                DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Totems recalled!")
+                break
+            end
+            i = i + 1
         end
-    end)
+    end
+end)
+
+-- Function to toggle lock state
+function TotemNesia.ToggleLock()
+    TotemNesia.isLocked = not TotemNesia.isLocked
+    
+    if TotemNesia.isLocked then
+        messageFrame:SetBackdropColor(0, 0, 0, 0.25)
+        messageFrame:RegisterForClicks("LeftButtonUp")
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame locked.")
+    else
+        messageFrame:SetBackdropColor(0, 0, 0, 1)
+        messageFrame:RegisterForClicks()
+        messageFrame:Show()
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame unlocked. Drag to reposition.")
+    end
 end
 
 -- Event frame
@@ -189,31 +135,32 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 eventFrame:SetScript("OnEvent", function()
     if event == "PLAYER_REGEN_DISABLED" then
-        -- Entered combat - hide message and reset timer
         TotemNesia.inCombat = true
         TotemNesia.displayTimer = nil
         messageFrame:Hide()
-        TotemNesia.DebugPrint("Entered combat, hiding message")
+        TotemNesia.DebugPrint("Entered combat")
         
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Left combat
         TotemNesia.inCombat = false
-        TotemNesia.DebugPrint("Left combat - hasTotems flag is: " .. tostring(TotemNesia.hasTotems))
+        TotemNesia.DebugPrint("Left combat - hasTotems: " .. tostring(TotemNesia.hasTotems))
+        
         if IsShaman() and HasTotemsOut() then
-            -- Only show if totems are out
             TotemNesia.displayTimer = 15
             messageFrame:Show()
             messageFrame:SetAlpha(1)
             messageFrame:RegisterForClicks("LeftButtonUp")
-            TotemNesia.DebugPrint("Totems detected, showing recall message")
+            
+            if TotemNesia.audioEnabled then
+                PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
+            end
+            
+            TotemNesia.DebugPrint("Showing recall message")
         else
-            TotemNesia.DebugPrint("No totems detected, resetting flag")
-            -- Reset totem flag when leaving combat with no totems
             TotemNesia.hasTotems = false
+            TotemNesia.DebugPrint("No totems detected")
         end
         
     elseif event == "PLAYER_ENTERING_WORLD" then
-        -- Check if player is shaman
         if not IsShaman() then
             this:UnregisterAllEvents()
         end
@@ -225,9 +172,14 @@ local timerFrame = CreateFrame("Frame")
 timerFrame:SetScript("OnUpdate", function()
     if TotemNesia.displayTimer and TotemNesia.displayTimer > 0 then
         TotemNesia.displayTimer = TotemNesia.displayTimer - arg1
+        
+        local secondsLeft = math.ceil(TotemNesia.displayTimer)
+        timerText:SetText(secondsLeft .. "s")
+        
         if TotemNesia.displayTimer <= 0 then
             messageFrame:Hide()
             TotemNesia.displayTimer = nil
+            timerText:SetText("")
         end
     end
 end)
@@ -235,37 +187,68 @@ end)
 -- Slash commands
 SLASH_TOTEMNESIA1 = "/tn"
 SlashCmdList["TOTEMNESIA"] = function(msg)
-    if msg == "lock" then
+    local lowerMsg = string.lower(msg)
+    
+    if lowerMsg == "lock" then
         if not TotemNesia.isLocked then
             TotemNesia.ToggleLock()
         else
             DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame is already locked.")
         end
-    elseif msg == "unlock" then
+        
+    elseif lowerMsg == "unlock" then
         if TotemNesia.isLocked then
             TotemNesia.ToggleLock()
         else
             DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame is already unlocked.")
         end
-    elseif msg == "test" then
-        -- Show the clickable message
+        
+    elseif lowerMsg == "mute" then
+        if TotemNesia.audioEnabled then
+            TotemNesia.audioEnabled = false
+            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Audio notifications muted")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Audio is already muted.")
+        end
+        
+    elseif lowerMsg == "unmute" then
+        if not TotemNesia.audioEnabled then
+            TotemNesia.audioEnabled = true
+            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Audio notifications unmuted")
+            PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Audio is already unmuted.")
+        end
+        
+    elseif lowerMsg == "test" then
         TotemNesia.displayTimer = 15
         messageFrame:Show()
         messageFrame:SetAlpha(1)
         messageFrame:RegisterForClicks("LeftButtonUp")
-    elseif msg == "debug" then
+        
+    elseif lowerMsg == "debug" then
         TotemNesia.debugMode = not TotemNesia.debugMode
         if TotemNesia.debugMode then
             DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Debug mode ON")
         else
             DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Debug mode OFF")
         end
+        
     else
+        local lockStatus = TotemNesia.isLocked and "|cffff0000Locked|r" or "|cff00ff00Unlocked|r"
+        local audioStatus = TotemNesia.audioEnabled and "|cff00ff00Unmuted|r" or "|cffff0000Muted|r"
+        local debugStatus = TotemNesia.debugMode and "|cff00ff00On|r" or "|cffff0000Off|r"
+        
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia Commands:")
-        DEFAULT_CHAT_FRAME:AddMessage("/tn unlock - Unlock message frame for positioning")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffff00The message frame is currently|r " .. lockStatus)
         DEFAULT_CHAT_FRAME:AddMessage("/tn lock - Lock message frame")
-        DEFAULT_CHAT_FRAME:AddMessage("/tn test - Test the recall function")
+        DEFAULT_CHAT_FRAME:AddMessage("/tn unlock - Unlock message frame for positioning")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffff00The audio queue is currently|r " .. audioStatus)
+        DEFAULT_CHAT_FRAME:AddMessage("/tn mute - Mute the audio queue")
+        DEFAULT_CHAT_FRAME:AddMessage("/tn unmute - Unmute the audio queue")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffffff00The debug mode is currently|r " .. debugStatus)
         DEFAULT_CHAT_FRAME:AddMessage("/tn debug - Toggle debug messages")
+        DEFAULT_CHAT_FRAME:AddMessage("/tn test - Test the recall function")
     end
 end
 
