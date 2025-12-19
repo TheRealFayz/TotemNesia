@@ -26,6 +26,8 @@ TotemNesia helps Shamans efficiently manage their totems by providing a clickabl
 3. The message stays visible for 15 seconds
 4. Click anywhere on the message to cast Totemic Recall
 5. If you re-enter combat, the message disappears and resets
+![AlClick to recall totems](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Click%20to%20recall%20totems.png)
+
 
 ## Commands
 
