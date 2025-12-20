@@ -1,7 +1,7 @@
 ## Interface: 11200
 ## Title: TotemNesia
 ## Notes: Reminds Shamans to pick up their totems after combat
-## Author: YourName
-## Version: 1.0
+## Author: Fayz - Nordanaar
+## Version: 2.1
 
 TotemNesia.lua
