@@ -40,8 +40,9 @@ TotemNesia helps Shamans efficiently manage their totems by providing a clickabl
 | `/tn unlock` | Unlock message frame for repositioning |
 | `/tn mute` | Mute the audio notification |
 | `/tn unmute` | Unmute the audio notification |
-| `/tn test` | Test the notification display |
 | `/tn debug` | Toggle debug messages on/off |
+| `/tn test` | Test the notification display |
+| `/tn reset` | Reset the frame position to center |
 
 
 ## Usage Tips
