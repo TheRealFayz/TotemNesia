@@ -155,32 +155,6 @@ To use your own custom sound file:
 2. **Important**: You must completely exit WoW and restart for custom sounds to be recognized
 3. WoW caches available sound files at startup, so `/reload` is not sufficient
 
-
-## Version History
-
-### v2.1 - Current Release
-- Added a timer for the recall window
-- Added an audio queue to  pair with the recall window
-- Added audio options to /tn
-- Cleaned up the /tn menu to be more usable
-- Cleaned up codebase and removed experimental features
-- Streamlined debug messages for better performance
-- Optimized totem detection to only listen to necessary combat log events
-- Improved code readability and maintainability
-- Bug fixes and stability improvements
-
-### v2.0 - Major Overhaul
-- Complete overhaul with a clickable UI system
-- Smart totem detection via combat log parsing
-- Enhanced combat state handling
-- Debug mode toggle
-- Improved frame positioning and locking
-- Streamlined command system
-
-### v1.0 - Initial Release
-- Basic automatic totem recall functionality
-- Simple timer-based system
-
 ## Contributing
 
 Found a bug or have a feature request? Please submit an issue on the repository.
