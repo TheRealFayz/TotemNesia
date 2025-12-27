@@ -19,6 +19,7 @@ TotemNesia.hasTotems = false
 TotemNesia.monitoringForRecall = false
 TotemNesia.monitorTimer = 0
 TotemNesia.activeTotems = {}  -- Track which totems are currently active
+TotemNesia.totemTimestamps = {}  -- Track when each totem was placed
 
 -- Initialize saved variables
 function TotemNesia.InitDB()
@@ -211,6 +212,23 @@ local function GetTotemIcon(totemName)
     return "Interface\\Icons\\Spell_Nature_Reincarnation"
 end
 
+-- Function to get totem duration in seconds
+local function GetTotemDuration(totemName)
+    -- Most totems last 2 minutes (120 seconds)
+    -- Some exceptions:
+    if string.find(totemName, "Earthbind") or string.find(totemName, "Stoneclaw") then
+        return 45  -- 45 seconds
+    elseif string.find(totemName, "Grounding") then
+        return 45  -- 45 seconds
+    elseif string.find(totemName, "Fire Nova") then
+        return 5   -- 5 seconds (though we ignore this totem)
+    elseif string.find(totemName, "Searing") then
+        return 55  -- 55 seconds (rank dependent, using average)
+    end
+    -- Default duration for most totems
+    return 120
+end
+
 -- Function to get totem element type
 local function GetTotemElement(totemName)
     -- Fire totems
@@ -309,6 +327,29 @@ function TotemNesia.UpdateTotemBar()
         icon:Hide()
     end
     
+    -- Check for expired totems and remove them
+    local currentTime = GetTime()
+    for totemName, timestamp in pairs(TotemNesia.totemTimestamps) do
+        local duration = GetTotemDuration(totemName)
+        local elapsed = currentTime - timestamp
+        if elapsed >= duration then
+            -- Totem has expired
+            TotemNesia.activeTotems[totemName] = nil
+            TotemNesia.totemTimestamps[totemName] = nil
+            TotemNesia.DebugPrint("Totem expired: " .. totemName)
+        end
+    end
+    
+    -- Check if any totems left
+    local anyActive = false
+    for _ in pairs(TotemNesia.activeTotems) do
+        anyActive = true
+        break
+    end
+    if not anyActive then
+        TotemNesia.hasTotems = false
+    end
+    
     -- Count active totems
     local activeCount = 0
     for _ in pairs(TotemNesia.activeTotems) do
@@ -343,6 +384,13 @@ function TotemNesia.UpdateTotemBar()
             texture:SetTexture(GetTotemIcon(totemName))
             icon.texture = texture
             
+            -- Add timer text
+            local timerText = icon:CreateFontString(nil, "OVERLAY")
+            timerText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+            timerText:SetPoint("BOTTOM", icon, "BOTTOM", 0, 0)
+            timerText:SetTextColor(1, 1, 1)
+            icon.timerText = timerText
+            
             TotemNesia.totemBarIcons[totemName] = icon
         end
         
@@ -352,6 +400,21 @@ function TotemNesia.UpdateTotemBar()
         -- Always full color since we're only showing active totems
         icon.texture:SetVertexColor(1, 1, 1)
         icon.totemName = totemName
+        
+        -- Update timer
+        local timestamp = TotemNesia.totemTimestamps[totemName]
+        if timestamp then
+            local elapsed = GetTime() - timestamp
+            local duration = GetTotemDuration(totemName)
+            local remaining = duration - elapsed
+            if remaining > 0 then
+                icon.timerText:SetText(math.ceil(remaining))
+            else
+                icon.timerText:SetText("0")
+            end
+        else
+            icon.timerText:SetText("")
+        end
         
         index = index + 1
     end
@@ -661,6 +724,7 @@ combatFrame:SetScript("OnEvent", function()
                 totemName = string.gsub(totemName, "%.", "")
                 
                 TotemNesia.activeTotems[totemName] = true
+                TotemNesia.totemTimestamps[totemName] = GetTime()  -- Record placement time
                 TotemNesia.hasTotems = true
                 TotemNesia.DebugPrint("Totem summoned: " .. totemName)
             else
@@ -671,6 +735,7 @@ combatFrame:SetScript("OnEvent", function()
         if string.find(arg1, "Totemic Recall") then
             -- Clear all active totems
             TotemNesia.activeTotems = {}
+            TotemNesia.totemTimestamps = {}  -- Clear timestamps too
             TotemNesia.hasTotems = false
             TotemNesia.monitoringForRecall = false
             TotemNesia.monitorTimer = 0
@@ -684,6 +749,7 @@ combatFrame:SetScript("OnEvent", function()
         if string.find(arg1, "Totem") and string.find(arg1, "dies") then
             local totemName = string.gsub(arg1, "(.+) dies%.", "%1")
             TotemNesia.activeTotems[totemName] = nil
+            TotemNesia.totemTimestamps[totemName] = nil
             TotemNesia.DebugPrint("Totem died: " .. totemName)
             
             -- Check if any totems left
@@ -699,12 +765,14 @@ combatFrame:SetScript("OnEvent", function()
     elseif event == "CHAT_MSG_SPELL_AURA_GONE_SELF" then
         if string.find(arg1, "Totemic Recall") then
             TotemNesia.activeTotems = {}
+            TotemNesia.totemTimestamps = {}
             TotemNesia.hasTotems = false
             TotemNesia.DebugPrint("Totemic Recall faded - totems gone")
         elseif string.find(arg1, "Totem") then
             -- Individual totem faded
             local totemName = string.gsub(arg1, "(.+) fades from you%.", "%1")
             TotemNesia.activeTotems[totemName] = nil
+            TotemNesia.totemTimestamps[totemName] = nil
             TotemNesia.DebugPrint("Totem faded: " .. totemName)
             
             -- Check if any totems left
