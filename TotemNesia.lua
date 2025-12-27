@@ -1,6 +1,10 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 2.4
+-- Version 2.5
+
+-- ============================================================================
+-- CLASS CHECK AND INITIALIZATION
+-- ============================================================================
 
 -- Early class check - don't load on non-Shamans
 local _, playerClass = UnitClass("player")
@@ -432,13 +436,6 @@ totemUpdateFrame:SetScript("OnUpdate", function()
     end
 end)
 
--- Debug print function
-function TotemNesia.DebugPrint(msg)
-    if TotemNesiaDB.debugMode then
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia DEBUG: " .. msg)
-    end
-end
-
 -- Minimap button
 local minimapButton = CreateFrame("Button", "TotemNesiaMinimapButton", Minimap)
 minimapButton:SetWidth(31)
@@ -463,8 +460,8 @@ minimapBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
 -- Create options menu frame
 local optionsMenu = CreateFrame("Frame", "TotemNesiaOptionsMenu", UIParent)
-optionsMenu:SetWidth(250)
-optionsMenu:SetHeight(310)
+optionsMenu:SetWidth(400)
+optionsMenu:SetHeight(260)
 optionsMenu:SetPoint("CENTER", UIParent, "CENTER")
 optionsMenu:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -491,6 +488,30 @@ local menuTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalLa
 menuTitle:SetPoint("TOP", 0, -15)
 menuTitle:SetText("TotemNesia Options")
 
+-- Close button (X in upper right)
+local closeButton = CreateFrame("Button", nil, optionsMenu)
+closeButton:SetWidth(20)
+closeButton:SetHeight(20)
+closeButton:SetPoint("TOPRIGHT", -10, -10)
+
+-- Create X texture
+local closeText = closeButton:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+closeText:SetPoint("CENTER", 0, 0)
+closeText:SetText("X")
+closeText:SetTextColor(1, 0.2, 0.2)
+
+-- Hover effect
+closeButton:SetScript("OnEnter", function()
+    closeText:SetTextColor(1, 0, 0)
+end)
+closeButton:SetScript("OnLeave", function()
+    closeText:SetTextColor(1, 0.2, 0.2)
+end)
+closeButton:SetScript("OnClick", function()
+    optionsMenu:Hide()
+end)
+
+-- LEFT COLUMN
 -- Lock UI Frame checkbox
 local lockCheckbox = CreateFrame("CheckButton", "TotemNesiaLockCheckbox", optionsMenu, "UICheckButtonTemplate")
 lockCheckbox:SetPoint("TOPLEFT", 20, -45)
@@ -539,9 +560,10 @@ hideUICheckbox:SetScript("OnClick", function()
     TotemNesiaDB.hideUIElement = this:GetChecked() and true or false
 end)
 
+-- RIGHT COLUMN
 -- Lock Totem Tracker checkbox
 local lockTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
-lockTotemBarCheckbox:SetPoint("TOPLEFT", 20, -135)
+lockTotemBarCheckbox:SetPoint("TOPLEFT", 210, -45)
 lockTotemBarCheckbox:SetWidth(24)
 lockTotemBarCheckbox:SetHeight(24)
 local lockTotemBarLabel = lockTotemBarCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -558,7 +580,7 @@ end)
 
 -- Hide Totem Tracker checkbox
 local hideTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaHideTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
-hideTotemBarCheckbox:SetPoint("TOPLEFT", 20, -165)
+hideTotemBarCheckbox:SetPoint("TOPLEFT", 210, -75)
 hideTotemBarCheckbox:SetWidth(24)
 hideTotemBarCheckbox:SetHeight(24)
 local hideTotemBarLabel = hideTotemBarCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -571,7 +593,7 @@ end)
 
 -- Debug mode checkbox
 local debugCheckbox = CreateFrame("CheckButton", "TotemNesiaDebugCheckbox", optionsMenu, "UICheckButtonTemplate")
-debugCheckbox:SetPoint("TOPLEFT", 20, -195)
+debugCheckbox:SetPoint("TOPLEFT", 210, -105)
 debugCheckbox:SetWidth(24)
 debugCheckbox:SetHeight(24)
 local debugLabel = debugCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -583,13 +605,13 @@ end)
 
 -- Timer duration label
 local timerLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-timerLabel:SetPoint("TOP", 0, -225)
+timerLabel:SetPoint("TOP", 0, -145)
 timerLabel:SetText("Display Duration: 15s")
 
 -- Timer duration slider
 local timerSlider = CreateFrame("Slider", "TotemNesiaTimerSlider", optionsMenu)
-timerSlider:SetPoint("TOP", 0, -245)
-timerSlider:SetWidth(200)
+timerSlider:SetPoint("TOP", 0, -165)
+timerSlider:SetWidth(350)
 timerSlider:SetHeight(15)
 timerSlider:SetOrientation("HORIZONTAL")
 timerSlider:SetMinMaxValues(15, 60)
@@ -619,14 +641,39 @@ timerSlider:SetScript("OnValueChanged", function()
     timerLabel:SetText("Display Duration: " .. value .. "s")
 end)
 
--- Close button
-local closeButton = CreateFrame("Button", nil, optionsMenu, "UIPanelButtonTemplate")
-closeButton:SetWidth(80)
-closeButton:SetHeight(22)
-closeButton:SetPoint("BOTTOM", 0, 15)
-closeButton:SetText("Close")
-closeButton:SetScript("OnClick", function()
-    optionsMenu:Hide()
+-- Keybind macros section
+local keybindTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+keybindTitle:SetPoint("TOP", 0, -200)
+keybindTitle:SetText("You can create a hotkey to interact with the UI element by copying the macro below:")
+
+-- Recall macro EditBox
+local keybind1 = CreateFrame("EditBox", nil, optionsMenu)
+keybind1:SetPoint("TOPLEFT", 20, -220)
+keybind1:SetWidth(360)
+keybind1:SetHeight(20)
+keybind1:SetFontObject(GameFontNormalSmall)
+keybind1:SetText("/script TotemNesia_RecallTotems()")
+keybind1:SetAutoFocus(false)
+keybind1:SetScript("OnEditFocusGained", function()
+    this:HighlightText()
+end)
+keybind1:SetScript("OnEscapePressed", function()
+    this:ClearFocus()
+end)
+keybind1:SetScript("OnEnterPressed", function()
+    this:ClearFocus()
+end)
+keybind1:SetScript("OnChar", function()
+    -- Block all character input
+    this:SetText("/script TotemNesia_RecallTotems()")
+    this:HighlightText()
+end)
+keybind1:SetScript("OnTextChanged", function()
+    -- Restore text if it gets changed
+    if this:GetText() ~= "/script TotemNesia_RecallTotems()" then
+        this:SetText("/script TotemNesia_RecallTotems()")
+        this:HighlightText()
+    end
 end)
 
 -- Update minimap button position
@@ -922,6 +969,20 @@ end)
 -- Slash commands
 SLASH_TOTEMNESIA1 = "/tn"
 SlashCmdList["TOTEMNESIA"] = function(msg)
+    local lowerMsg = string.lower(msg)
+    
+    -- Undocumented test command
+    if lowerMsg == "test" then
+        TotemNesia.hasTotems = true
+        TotemNesia.displayTimer = TotemNesiaDB.timerDuration
+        iconFrame:Show()
+        if TotemNesiaDB.audioEnabled then
+            PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
+        end
+        return
+    end
+    
+    -- Toggle options menu
     if optionsMenu:IsVisible() then
         optionsMenu:Hide()
     else
@@ -939,3 +1000,22 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
 end
 
 DEFAULT_CHAT_FRAME:AddMessage("TotemNesia loaded. Type /tn to open options.")
+
+-- Helper function for keybind macro (users create their own macro)
+function TotemNesia_RecallTotems()
+    if not IsShaman() then
+        return
+    end
+    
+    if UnitAffectingCombat("player") then
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Cannot recall totems while in combat")
+        return
+    end
+    
+    if TotemNesia.hasTotems then
+        CastSpellByName("Totemic Recall")
+        TotemNesia.DebugPrint("Keybind: Totemic Recall cast")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: No totems to recall")
+    end
+end
