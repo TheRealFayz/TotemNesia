@@ -1,6 +1,18 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
 
+-- Early class check - don't load on non-Shamans
+local _, playerClass = UnitClass("player")
+if playerClass ~= "SHAMAN" then
+    -- Only show message if debug would be enabled (but we can't check SavedVariables yet)
+    -- So we'll just always show this for non-Shamans as feedback
+    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Non-Shaman detected, addon disabled.")
+    return
+end
+
+-- Shaman detected, proceed with loading
+DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Shaman detected, addon enabled.")
+
 TotemNesia = {}
 TotemNesia.displayTimer = nil
 TotemNesia.inCombat = false
@@ -23,19 +35,20 @@ function TotemNesia.InitDB()
     end
 end
 
--- Create the message frame
-local messageFrame = CreateFrame("Button", "TotemNesiaMessageFrame", UIParent)
-messageFrame:SetWidth(300)
-messageFrame:SetHeight(80)
-messageFrame:SetPoint("CENTER", 0, 200)
-messageFrame:SetMovable(true)
-messageFrame:SetUserPlaced(true)
-messageFrame:EnableMouse(true)
-messageFrame:RegisterForClicks("LeftButtonUp")
-messageFrame:SetFrameStrata("HIGH")
-messageFrame:Hide()
+-- Create the icon frame
+local iconFrame = CreateFrame("Button", "TotemNesiaIconFrame", UIParent)
+iconFrame:SetWidth(80)
+iconFrame:SetHeight(80)
+iconFrame:SetPoint("CENTER", 0, 200)
+iconFrame:SetMovable(true)
+iconFrame:SetUserPlaced(true)
+iconFrame:EnableMouse(true)
+iconFrame:RegisterForClicks("LeftButtonUp")
+iconFrame:SetFrameStrata("HIGH")
+iconFrame:Hide()
 
-messageFrame:SetBackdrop({
+-- Set up backdrop
+iconFrame:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
     edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
     tile = true,
@@ -43,39 +56,59 @@ messageFrame:SetBackdrop({
     edgeSize = 32,
     insets = { left = 11, right = 12, top = 12, bottom = 11 }
 })
-messageFrame:SetBackdropColor(0, 0, 0, 0.75)
-messageFrame:SetBackdropBorderColor(1, 1, 1, 1)
+iconFrame:SetBackdropColor(0, 0, 0, 0.75)
+iconFrame:SetBackdropBorderColor(1, 1, 1, 1)
 
--- Create the text
-local messageText = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-messageText:SetPoint("CENTER", messageFrame, "CENTER", 0, 10)
-messageText:SetFont("Fonts\\FRIZQT__.TTF", 30, "OUTLINE")
-messageText:SetText("Click to recall totems")
-messageText:SetTextColor(1, 0.82, 0)
+-- Get Totemic Recall spell icon texture
+local function GetTotemicRecallIcon()
+    local i = 1
+    while true do
+        local spellName, spellRank = GetSpellName(i, BOOKTYPE_SPELL)
+        if not spellName then
+            break
+        end
+        if spellName == "Totemic Recall" then
+            local texture = GetSpellTexture(i, BOOKTYPE_SPELL)
+            return texture
+        end
+        i = i + 1
+    end
+    -- Fallback to generic totem icon if spell not found
+    return "Interface\\Icons\\Spell_Nature_Reincarnation"
+end
 
--- Create the timer text
-local timerText = messageFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-timerText:SetPoint("CENTER", messageFrame, "CENTER", 0, -15)
-timerText:SetFont("Fonts\\FRIZQT__.TTF", 20, "OUTLINE")
+-- Create the spell icon texture
+local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+iconTexture:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
+iconTexture:SetWidth(64)
+iconTexture:SetHeight(64)
+iconTexture:SetTexture(GetTotemicRecallIcon())
+
+-- Create the timer text overlay
+local timerText = iconFrame:CreateFontString(nil, "OVERLAY")
+timerText:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
+timerText:SetFont("Fonts\\FRIZQT__.TTF", 48, "OUTLINE")
 timerText:SetText("")
 timerText:SetTextColor(1, 1, 1)
+timerText:SetShadowColor(0, 0, 0, 1)
+timerText:SetShadowOffset(2, -2)
 
 -- Make frame draggable
-messageFrame:RegisterForDrag("LeftButton")
-messageFrame:SetScript("OnDragStart", function()
+iconFrame:RegisterForDrag("LeftButton")
+iconFrame:SetScript("OnDragStart", function()
     if not TotemNesiaDB.isLocked then
         this:StartMoving()
     end
 end)
-messageFrame:SetScript("OnDragStop", function()
+iconFrame:SetScript("OnDragStop", function()
     this:StopMovingOrSizing()
 end)
 
 -- Make frame clickable to recall totems
-messageFrame:SetScript("OnClick", function()
-    TotemNesia.DebugPrint("Frame clicked")
+iconFrame:SetScript("OnClick", function()
+    TotemNesia.DebugPrint("Icon clicked")
     
-    if TotemNesiaDB.isLocked and messageFrame:IsVisible() then
+    if TotemNesiaDB.isLocked and iconFrame:IsVisible() then
         local i = 1
         while true do
             local spellName = GetSpellName(i, BOOKTYPE_SPELL)
@@ -84,7 +117,7 @@ messageFrame:SetScript("OnClick", function()
             end
             if spellName == "Totemic Recall" then
                 CastSpell(i, BOOKTYPE_SPELL)
-                messageFrame:Hide()
+                iconFrame:Hide()
                 TotemNesia.displayTimer = nil
                 TotemNesia.hasTotems = false
                 DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Totems recalled!")
@@ -130,7 +163,7 @@ combatFrame:SetScript("OnEvent", function()
         
         if string.find(arg1, "Totemic Recall") then
             TotemNesia.hasTotems = false
-            messageFrame:Hide()
+            iconFrame:Hide()
             TotemNesia.displayTimer = nil
             timerText:SetText("")
             TotemNesia.DebugPrint("Manual Totemic Recall detected - flag reset")
@@ -148,21 +181,21 @@ function TotemNesia.ToggleLock()
     TotemNesiaDB.isLocked = not TotemNesiaDB.isLocked
     
     if TotemNesiaDB.isLocked then
-        messageFrame:SetBackdropColor(0, 0, 0, 0.75)
-        messageFrame:RegisterForClicks("LeftButtonUp")
+        iconFrame:SetBackdropColor(0, 0, 0, 0.75)
+        iconFrame:RegisterForClicks("LeftButtonUp")
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame locked.")
     else
-        messageFrame:SetBackdropColor(0, 0, 0, 1)
-        messageFrame:RegisterForClicks()
-        messageFrame:Show()
+        iconFrame:SetBackdropColor(0, 0, 0, 1)
+        iconFrame:RegisterForClicks()
+        iconFrame:Show()
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame unlocked. Drag to reposition.")
     end
 end
 
 -- Function to reset frame position
 function TotemNesia.ResetPosition()
-    messageFrame:ClearAllPoints()
-    messageFrame:SetPoint("CENTER", 0, 200)
+    iconFrame:ClearAllPoints()
+    iconFrame:SetPoint("CENTER", 0, 200)
     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame position reset to center.")
 end
 
@@ -180,7 +213,7 @@ eventFrame:SetScript("OnEvent", function()
     elseif event == "PLAYER_REGEN_DISABLED" then
         TotemNesia.inCombat = true
         TotemNesia.displayTimer = nil
-        messageFrame:Hide()
+        iconFrame:Hide()
         timerText:SetText("")
         TotemNesia.DebugPrint("Entered combat")
         
@@ -190,21 +223,22 @@ eventFrame:SetScript("OnEvent", function()
         
         if IsShaman() and HasTotemsOut() then
             TotemNesia.displayTimer = 15
-            messageFrame:Show()
-            messageFrame:SetAlpha(1)
-            messageFrame:RegisterForClicks("LeftButtonUp")
+            iconFrame:Show()
+            iconFrame:SetAlpha(1)
+            iconFrame:RegisterForClicks("LeftButtonUp")
             
             if TotemNesiaDB.audioEnabled then
                 PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
             end
             
-            TotemNesia.DebugPrint("Showing recall message")
+            TotemNesia.DebugPrint("Showing recall icon")
         else
             TotemNesia.hasTotems = false
             TotemNesia.DebugPrint("No totems detected")
         end
         
     elseif event == "PLAYER_ENTERING_WORLD" then
+        -- Additional safety check (though we already return early if not Shaman)
         if not IsShaman() then
             this:UnregisterAllEvents()
         end
@@ -218,10 +252,10 @@ timerFrame:SetScript("OnUpdate", function()
         TotemNesia.displayTimer = TotemNesia.displayTimer - arg1
         
         local secondsLeft = math.ceil(TotemNesia.displayTimer)
-        timerText:SetText(secondsLeft .. "s")
+        timerText:SetText(secondsLeft)
         
         if TotemNesia.displayTimer <= 0 then
-            messageFrame:Hide()
+            iconFrame:Hide()
             TotemNesia.displayTimer = nil
             timerText:SetText("")
             TotemNesia.DebugPrint("Timer expired - totems still may be active")
@@ -270,9 +304,9 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
         
     elseif lowerMsg == "test" then
         TotemNesia.displayTimer = 15
-        messageFrame:Show()
-        messageFrame:SetAlpha(1)
-        messageFrame:RegisterForClicks("LeftButtonUp")
+        iconFrame:Show()
+        iconFrame:SetAlpha(1)
+        iconFrame:RegisterForClicks("LeftButtonUp")
         
     elseif lowerMsg == "debug" then
         TotemNesiaDB.debugMode = not TotemNesiaDB.debugMode
