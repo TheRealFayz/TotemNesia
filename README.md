@@ -8,6 +8,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 
 ### Totem Tracker Bar
 - **Real-time totem display** - Shows icons of all currently active totems
+- **Duration timers** - Each totem displays countdown showing time remaining
 - **Automatic updates** - Icons appear when totems are placed, disappear when they expire or are recalled
 - **Compact design** - 20x20 pixel icons with minimal spacing
 - **Smart visibility** - Only shows when you have active totems
@@ -15,6 +16,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 
 ### Totemic Recall Notification
 - **Clickable interface** - Click the icon to instantly recall all totems
+- **Keybind support** - Create a macro to recall totems with a hotkey
 - **Countdown timer** - Adjustable 15-60 second countdown before auto-hide
 - **Elemental indicators** - Small corner icons show which element totems are active
   - Fire (top-left), Earth (top-right), Air (bottom-left), Water (bottom-right)
@@ -38,7 +40,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 
 ### During Combat
 1. TotemNesia tracks every totem you cast through combat log monitoring
-2. The totem tracker bar shows all active totems with their actual spell icons
+2. The totem tracker bar shows all active totems with their actual spell icons and duration timers
 3. Elemental indicators on the Totemic Recall icon show which types are active
 
 ### After Combat
@@ -65,6 +67,12 @@ Access all settings by clicking the minimap button, or typing `/tn`:
 - Adjust how long the Totemic Recall icon stays visible (15-60 seconds)
 - Move the slider to your preferred duration
 - Setting saves automatically
+
+### Keybind Macro
+- Click the macro text at the bottom of the options menu to select it
+- Press Ctrl+C to copy
+- Create a WoW macro with this command and bind it to a key
+- Allows you to recall totems with a hotkey instead of clicking the UI
 
 ## Usage Tips
 
