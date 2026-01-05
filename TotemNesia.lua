@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 2.6
+-- Version 3.0
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -16,6 +16,15 @@ end
 -- Shaman detected, proceed with loading
 DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Shaman detected, addon enabled.")
 
+-- ============================================================================
+-- CONSTANTS
+-- ============================================================================
+local TOTEM_DISTANCE_THRESHOLD = 30  -- Yards before warning player about totem distance
+local DISTANCE_CHECK_INTERVAL = 0.5  -- Seconds between distance checks
+
+-- ============================================================================
+-- ADDON STATE
+-- ============================================================================
 TotemNesia = {}
 TotemNesia.displayTimer = nil
 TotemNesia.inCombat = false
@@ -24,6 +33,8 @@ TotemNesia.monitoringForRecall = false
 TotemNesia.monitorTimer = 0
 TotemNesia.activeTotems = {}  -- Track which totems are currently active
 TotemNesia.totemTimestamps = {}  -- Track when each totem was placed
+TotemNesia.totemPositions = {}  -- Track where totems were placed
+TotemNesia.distanceCheckTimer = 0  -- Timer for distance checks
 
 -- Initialize saved variables
 function TotemNesia.InitDB()
@@ -66,6 +77,38 @@ function TotemNesia.InitDB()
     end
     if TotemNesiaDB.totemTrackerLayout == nil then
         TotemNesiaDB.totemTrackerLayout = "Horizontal"
+    end
+    if TotemNesiaDB.totemBarEnabled == nil then
+        TotemNesiaDB.totemBarEnabled = true
+    end
+    if TotemNesiaDB.totemBarSlots == nil then
+        TotemNesiaDB.totemBarSlots = {
+            fire = nil,
+            earth = nil,
+            water = nil,
+            air = nil
+        }
+    end
+    if TotemNesiaDB.totemBarLocked == nil then
+        TotemNesiaDB.totemBarLocked = true
+    end
+    if TotemNesiaDB.totemBarLayout == nil then
+        TotemNesiaDB.totemBarLayout = "Horizontal"
+    end
+    if TotemNesiaDB.totemBarFlyoutDirection == nil then
+        TotemNesiaDB.totemBarFlyoutDirection = "Up"
+    end
+    if TotemNesiaDB.totemBarHidden == nil then
+        TotemNesiaDB.totemBarHidden = false
+    end
+    if TotemNesiaDB.uiFrameScale == nil then
+        TotemNesiaDB.uiFrameScale = 1.0
+    end
+    if TotemNesiaDB.totemTrackerScale == nil then
+        TotemNesiaDB.totemTrackerScale = 1.0
+    end
+    if TotemNesiaDB.totemBarScale == nil then
+        TotemNesiaDB.totemBarScale = 1.0
     end
 end
 
@@ -326,6 +369,454 @@ function TotemNesia.UpdateElementalIndicators()
     end
 end
 
+-- ============================================================================
+-- TOTEM BAR (Quick-cast 4-slot bar)
+-- ============================================================================
+
+-- Totem lists for Totem Bar (organized by element)
+TotemNesia.totemLists = {
+    fire = {
+        "Searing Totem",
+        "Fire Nova Totem",
+        "Magma Totem",
+        "Frost Resistance Totem",
+        "Flametongue Totem",
+        "Totem of Wrath"
+    },
+    earth = {
+        "Stoneclaw Totem",
+        "Stoneskin Totem",
+        "Earthbind Totem",
+        "Strength of Earth Totem",
+        "Tremor Totem"
+    },
+    water = {
+        "Healing Stream Totem",
+        "Mana Spring Totem",
+        "Fire Resistance Totem",
+        "Disease Cleansing Totem",
+        "Poison Cleansing Totem",
+        "Mana Tide Totem"
+    },
+    air = {
+        "Grounding Totem",
+        "Windfury Totem",
+        "Grace of Air Totem",
+        "Nature Resistance Totem",
+        "Tranquil Air Totem",
+        "Windwall Totem"
+    }
+}
+
+-- Totem Bar slot data (initialize before creating slots)
+TotemNesia.totemBarSlots = {}
+TotemNesia.totemBarTimers = {}
+
+-- Create Totem Bar frame
+local totemBar = CreateFrame("Frame", "TotemNesiaTotemBar", UIParent)
+totemBar:SetWidth(100)  -- 4 slots @ 24px + spacing
+totemBar:SetHeight(28)
+totemBar:SetPoint("CENTER", UIParent, "CENTER", 0, -200)
+totemBar:SetMovable(true)
+totemBar:SetUserPlaced(true)
+totemBar:SetFrameStrata("MEDIUM")
+totemBar:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true,
+    tileSize = 32,
+    edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 }
+})
+totemBar:SetBackdropColor(0, 0, 0, 0.75)
+totemBar:Hide()  -- Hidden by default until enabled
+
+-- Make Totem Bar draggable when unlocked
+totemBar:RegisterForDrag("LeftButton")
+totemBar:SetScript("OnDragStart", function()
+    if not TotemNesiaDB.totemBarLocked then
+        this:StartMoving()
+    end
+end)
+totemBar:SetScript("OnDragStop", function()
+    this:StopMovingOrSizing()
+end)
+
+-- Create 4 element slots (Fire, Earth, Water, Air)
+local elementOrder = {"fire", "earth", "water", "air"}
+local slotSize = 24
+local slotSpacing = 1
+
+for i, element in ipairs(elementOrder) do
+    local slot = CreateFrame("Button", "TotemNesiaTotemBarSlot_"..element, totemBar)
+    slot:SetWidth(slotSize)
+    slot:SetHeight(slotSize)
+    slot:SetPoint("LEFT", totemBar, "LEFT", 4 + ((i-1) * (slotSize + slotSpacing)), 0)
+    
+    -- Slot background
+    slot:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false,
+        tileSize = 1,
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 }
+    })
+    slot:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+    slot:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    
+    -- Totem icon texture
+    local iconTexture = slot:CreateTexture(nil, "ARTWORK")
+    iconTexture:SetAllPoints(slot)
+    iconTexture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    slot.iconTexture = iconTexture
+    
+    -- Timer text
+    local timerText = slot:CreateFontString(nil, "OVERLAY")
+    timerText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    timerText:SetPoint("BOTTOM", slot, "BOTTOM", 0, 0)
+    timerText:SetTextColor(1, 1, 1)
+    slot.timerText = timerText
+    
+    -- Element identifier
+    slot.element = element
+    
+    -- Store slot reference
+    TotemNesia.totemBarSlots[element] = slot
+    
+    -- Create flyout menu for this slot (hidden by default)
+    local flyout = CreateFrame("Frame", "TotemNesiaFlyout_"..element, slot)
+    flyout:SetFrameStrata("DIALOG")
+    flyout:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 32,
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    flyout:SetBackdropColor(0, 0, 0, 0.95)
+    flyout:SetPoint("BOTTOM", slot, "TOP", 0, 2)
+    flyout:Hide()
+    slot.flyout = flyout
+    slot.element = element
+    
+    -- Populate flyout with totem icons in a single line
+    local totems = TotemNesia.totemLists[element]
+    local iconSize = 24
+    local iconSpacing = 2
+    local numTotems = table.getn(totems)
+    
+    -- Flyout will be resized dynamically based on direction
+    -- For now, set it for horizontal (will be updated by UpdateTotemBarFlyouts)
+    flyout:SetWidth((numTotems * iconSize) + ((numTotems + 1) * iconSpacing))
+    flyout:SetHeight(iconSize + (2 * iconSpacing))
+    
+    for j, totemName in ipairs(totems) do
+        local button = CreateFrame("Button", nil, flyout)
+        button:SetWidth(iconSize)
+        button:SetHeight(iconSize)
+        -- Position horizontally for now (will be repositioned by UpdateTotemBarFlyouts)
+        button:SetPoint("LEFT", flyout, "LEFT", iconSpacing + ((j - 1) * (iconSize + iconSpacing)), 0)
+        
+        -- Button background
+        button:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            tile = false,
+            tileSize = 1,
+            edgeSize = 1,
+            insets = { left = 0, right = 0, top = 0, bottom = 0 }
+        })
+        button:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+        button:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        
+        -- Totem icon
+        local btnIcon = button:CreateTexture(nil, "ARTWORK")
+        btnIcon:SetAllPoints(button)
+        btnIcon:SetTexture(GetTotemIcon(totemName))
+        btnIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        
+        button.totemName = totemName
+        button.element = element  -- Store element for use in OnClick
+        
+        -- Tooltip on hover
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+            -- Search for the spell in the spellbook
+            local spellName = this.totemName
+            local i = 1
+            while true do
+                local name, rank = GetSpellName(i, BOOKTYPE_SPELL)
+                if not name then
+                    break
+                end
+                if name == spellName then
+                    GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+                    GameTooltip:Show()
+                    this:SetBackdropBorderColor(1, 1, 0, 1)
+                    return
+                end
+                i = i + 1
+            end
+            -- Fallback if spell not found in book
+            GameTooltip:SetText(spellName, 1, 1, 1)
+            GameTooltip:Show()
+            this:SetBackdropBorderColor(1, 1, 0, 1)
+        end)
+        button:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+            this:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        end)
+        
+        -- Click handling
+        button:RegisterForClicks("LeftButtonUp")
+        button:SetScript("OnClick", function()
+            if IsControlKeyDown() then
+                -- Ctrl-click: Set as default totem for this slot
+                local elem = this.element
+                TotemNesiaDB.totemBarSlots[elem] = this.totemName
+                local slotBtn = TotemNesia.totemBarSlots[elem]
+                if slotBtn then
+                    slotBtn.iconTexture:SetTexture(GetTotemIcon(this.totemName))
+                    slotBtn.iconTexture:SetAlpha(1)
+                    slotBtn.selectedTotem = this.totemName
+                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: " .. this.totemName .. " set to " .. elem .. " slot")
+                else
+                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia DEBUG: slotBtn is nil for element: " .. tostring(elem))
+                end
+                flyout.hideTime = nil
+                flyout:Hide()
+            else
+                -- Normal click: Cast totem without updating slot
+                CastSpellByName(this.totemName)
+                flyout.hideTime = nil
+                flyout:Hide()
+            end
+        end)
+    end
+    
+    -- Slot mouse events for flyout
+    slot:SetScript("OnEnter", function()
+        this.flyout:Show()
+        this.flyout.hideTime = nil  -- Cancel any pending hide
+        this.flyout.slotEntered = true
+    end)
+    
+    slot:SetScript("OnLeave", function()
+        -- Start 1 second timer before hiding
+        this.flyout.hideTime = GetTime() + 1
+        this.flyout.slotEntered = false
+    end)
+    
+    -- Keep flyout open when mouse is over it
+    flyout:SetScript("OnEnter", function()
+        this:Show()
+        this.hideTime = nil  -- Cancel any pending hide
+    end)
+    
+    flyout:SetScript("OnLeave", function()
+        -- Start 1 second timer before hiding
+        this.hideTime = GetTime() + 1
+    end)
+    
+    -- Update handler that always runs to check hide timer
+    flyout:SetScript("OnUpdate", function(elapsed)
+        if this.hideTime then
+            local timeNow = GetTime()
+            if timeNow >= this.hideTime then
+                -- Check if mouse is over flyout or slot
+                if not MouseIsOver(this) and not this.slotEntered then
+                    this:Hide()
+                    this.hideTime = nil
+                    this.slotEntered = false
+                else
+                    -- Mouse came back, cancel hide
+                    this.hideTime = nil
+                end
+            end
+        end
+    end)
+    
+    -- Slot click to cast selected totem
+    slot:RegisterForClicks("LeftButtonUp")
+    slot:SetScript("OnClick", function()
+        if this.selectedTotem then
+            CastSpellByName(this.selectedTotem)
+        end
+    end)
+end
+
+-- Function to check if player is too far from totems
+function TotemNesia.CheckTotemDistance()
+    if not TotemNesia.hasTotems then
+        return false
+    end
+    
+    local px, py = GetPlayerMapPosition("player")
+    if not px or not py or (px == 0 and py == 0) then
+        return false -- Can't determine position
+    end
+    
+    for totemName, _ in pairs(TotemNesia.activeTotems) do
+        local pos = TotemNesia.totemPositions[totemName]
+        if pos then
+            -- Calculate distance in yards (approximate)
+            -- Map coordinates are 0-1, so we convert to yards
+            -- Assuming average zone is ~1000 yards across
+            local dx = (px - pos.x) * 1000
+            local dy = (py - pos.y) * 1000
+            local distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance > TOTEM_DISTANCE_THRESHOLD then
+                return true -- Player is too far from at least one totem
+            end
+        end
+    end
+    
+    return false
+end
+
+-- Function to update Totem Bar display and timers
+function TotemNesia.UpdateTotemBar()
+    if not TotemNesiaDB.totemBarEnabled or TotemNesiaDB.totemBarHidden then
+        totemBar:Hide()
+        return
+    end
+    
+    totemBar:Show()
+    
+    -- Apply layout (Horizontal or Vertical)
+    local isVertical = (TotemNesiaDB.totemBarLayout == "Vertical")
+    local slotSize = 24
+    local slotSpacing = 1
+    local elementOrder = {"fire", "earth", "water", "air"}
+    
+    if isVertical then
+        -- Vertical layout
+        totemBar:SetWidth(slotSize + 8)
+        totemBar:SetHeight((4 * slotSize) + (3 * slotSpacing) + 8)
+        
+        for i, element in ipairs(elementOrder) do
+            local slot = TotemNesia.totemBarSlots[element]
+            if slot then
+                slot:ClearAllPoints()
+                slot:SetPoint("TOP", totemBar, "TOP", 0, -4 - ((i-1) * (slotSize + slotSpacing)))
+            end
+        end
+    else
+        -- Horizontal layout
+        totemBar:SetWidth((4 * slotSize) + (3 * slotSpacing) + 8)
+        totemBar:SetHeight(slotSize + 8)
+        
+        for i, element in ipairs(elementOrder) do
+            local slot = TotemNesia.totemBarSlots[element]
+            if slot then
+                slot:ClearAllPoints()
+                slot:SetPoint("LEFT", totemBar, "LEFT", 4 + ((i-1) * (slotSize + slotSpacing)), 0)
+            end
+        end
+    end
+    
+    -- Update each slot
+    for element, slot in pairs(TotemNesia.totemBarSlots) do
+        -- Restore saved totem selection
+        local savedTotem = TotemNesiaDB.totemBarSlots[element]
+        if savedTotem and not slot.selectedTotem then
+            slot.selectedTotem = savedTotem
+            slot.iconTexture:SetTexture(GetTotemIcon(savedTotem))
+            slot.iconTexture:SetAlpha(1)
+        end
+        
+        -- Update timer if this totem type is active
+        local hasActiveTotem = false
+        for totemName, _ in pairs(TotemNesia.activeTotems) do
+            if GetTotemElement(totemName) == element then
+                hasActiveTotem = true
+                local timestamp = TotemNesia.totemTimestamps[totemName]
+                if timestamp then
+                    local elapsed = GetTime() - timestamp
+                    local duration = GetTotemDuration(totemName)
+                    local remaining = duration - elapsed
+                    if remaining > 0 then
+                        slot.timerText:SetText(math.ceil(remaining))
+                    else
+                        slot.timerText:SetText("")
+                    end
+                end
+                break
+            end
+        end
+        
+        if not hasActiveTotem then
+            slot.timerText:SetText("")
+        end
+    end
+end
+
+-- Function to update flyout directions
+function TotemNesia.UpdateTotemBarFlyouts()
+    local direction = TotemNesiaDB.totemBarFlyoutDirection
+    local iconSize = 24
+    local iconSpacing = 2
+    
+    if TotemNesiaDB.debugMode then
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: UpdateTotemBarFlyouts called, direction = " .. tostring(direction))
+    end
+    
+    for element, slot in pairs(TotemNesia.totemBarSlots) do
+        local flyout = slot.flyout
+        if flyout then
+            local totems = TotemNesia.totemLists[element]
+            local numTotems = table.getn(totems)
+            
+            -- Get all child buttons
+            local buttons = {}
+            local children = {flyout:GetChildren()}
+            for _, child in ipairs(children) do
+                table.insert(buttons, child)
+            end
+            
+            -- Reposition flyout relative to slot
+            flyout:ClearAllPoints()
+            
+            if direction == "Up" or direction == "Down" then
+                -- Vertical flyout layout (icons stacked vertically)
+                flyout:SetWidth(iconSize + (2 * iconSpacing))
+                flyout:SetHeight((numTotems * iconSize) + ((numTotems + 1) * iconSpacing))
+                
+                -- Position buttons vertically
+                for i, button in ipairs(buttons) do
+                    button:ClearAllPoints()
+                    button:SetPoint("TOP", flyout, "TOP", 0, -(iconSpacing + ((i - 1) * (iconSize + iconSpacing))))
+                end
+                
+                if direction == "Up" then
+                    flyout:SetPoint("BOTTOM", slot, "TOP", 0, 2)
+                else
+                    flyout:SetPoint("TOP", slot, "BOTTOM", 0, -2)
+                end
+            else
+                -- Horizontal flyout layout (icons side by side)
+                flyout:SetWidth((numTotems * iconSize) + ((numTotems + 1) * iconSpacing))
+                flyout:SetHeight(iconSize + (2 * iconSpacing))
+                
+                -- Position buttons horizontally
+                for i, button in ipairs(buttons) do
+                    button:ClearAllPoints()
+                    button:SetPoint("LEFT", flyout, "LEFT", iconSpacing + ((i - 1) * (iconSize + iconSpacing)), 0)
+                end
+                
+                if direction == "Left" then
+                    flyout:SetPoint("RIGHT", slot, "LEFT", -2, 0)
+                else
+                    flyout:SetPoint("LEFT", slot, "RIGHT", 2, 0)
+                end
+            end
+        end
+    end
+end
+
 -- Create totem tracker bar
 local totemTracker = CreateFrame("Frame", "TotemNesiaTotemTracker", UIParent)
 totemTracker:SetWidth(400)
@@ -413,7 +904,7 @@ function TotemNesia.UpdateTotemTracker()
         local icon = TotemNesia.totemTrackerIcons[totemName]
         
         if not icon then
-            icon = CreateFrame("Frame", nil, totemBar)
+            icon = CreateFrame("Frame", nil, totemTracker)
             icon:SetWidth(iconSize)
             icon:SetHeight(iconSize)
             
@@ -472,6 +963,7 @@ totemUpdateFrame:SetScript("OnUpdate", function()
     if this.timeSinceUpdate >= 0.5 then
         TotemNesia.UpdateTotemTracker()
         TotemNesia.UpdateElementalIndicators()
+        TotemNesia.UpdateTotemBar()
         this.timeSinceUpdate = 0
     end
 end)
@@ -501,7 +993,7 @@ minimapBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 -- Create options menu frame
 local optionsMenu = CreateFrame("Frame", "TotemNesiaOptionsMenu", UIParent)
 optionsMenu:SetWidth(400)
-optionsMenu:SetHeight(340)
+optionsMenu:SetHeight(520)
 optionsMenu:SetPoint("CENTER", UIParent, "CENTER")
 optionsMenu:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -527,6 +1019,12 @@ table.insert(UISpecialFrames, "TotemNesiaOptionsMenu")
 local menuTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 menuTitle:SetPoint("TOP", 0, -15)
 menuTitle:SetText("TotemNesia Options")
+
+-- Version number
+local versionText = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+versionText:SetPoint("TOP", 0, -35)
+versionText:SetText("v3.0")
+versionText:SetTextColor(0.7, 0.7, 0.7, 1)
 
 -- Close button (X in upper right)
 local closeButton = CreateFrame("Button", nil, optionsMenu)
@@ -600,6 +1098,19 @@ hideUICheckbox:SetScript("OnClick", function()
     TotemNesiaDB.hideUIElement = this:GetChecked() and true or false
 end)
 
+-- Enable Totem Bar checkbox
+local enableTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaEnableTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
+enableTotemBarCheckbox:SetPoint("TOPLEFT", 20, -135)
+enableTotemBarCheckbox:SetWidth(24)
+enableTotemBarCheckbox:SetHeight(24)
+local enableTotemBarLabel = enableTotemBarCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+enableTotemBarLabel:SetPoint("LEFT", enableTotemBarCheckbox, "RIGHT", 5, 0)
+enableTotemBarLabel:SetText("Enable Totem Bar")
+enableTotemBarCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.totemBarEnabled = this:GetChecked() and true or false
+    TotemNesia.UpdateTotemBar()
+end)
+
 -- RIGHT COLUMN
 -- Lock Totem Tracker checkbox
 local lockTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
@@ -631,26 +1142,44 @@ hideTotemBarCheckbox:SetScript("OnClick", function()
     TotemNesia.UpdateTotemTracker()
 end)
 
--- Debug mode checkbox
-local debugCheckbox = CreateFrame("CheckButton", "TotemNesiaDebugCheckbox", optionsMenu, "UICheckButtonTemplate")
-debugCheckbox:SetPoint("TOPLEFT", 210, -105)
-debugCheckbox:SetWidth(24)
-debugCheckbox:SetHeight(24)
-local debugLabel = debugCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-debugLabel:SetPoint("LEFT", debugCheckbox, "RIGHT", 5, 0)
-debugLabel:SetText("Debug mode")
-debugCheckbox:SetScript("OnClick", function()
-    TotemNesiaDB.debugMode = this:GetChecked() and true or false
+-- Lock Totem Bar checkbox
+local lockTotemBarCastCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCastCheckbox", optionsMenu, "UICheckButtonTemplate")
+lockTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -105)
+lockTotemBarCastCheckbox:SetWidth(24)
+lockTotemBarCastCheckbox:SetHeight(24)
+local lockTotemBarCastLabel = lockTotemBarCastCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+lockTotemBarCastLabel:SetPoint("LEFT", lockTotemBarCastCheckbox, "RIGHT", 5, 0)
+lockTotemBarCastLabel:SetText("Lock Totem Bar")
+lockTotemBarCastCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.totemBarLocked = this:GetChecked() and true or false
+    if TotemNesiaDB.totemBarLocked then
+        totemBar:EnableMouse(false)
+    else
+        totemBar:EnableMouse(true)
+    end
 end)
 
--- "Will be enabled when in:" section
+-- Hide Totem Bar checkbox
+local hideTotemBarCastCheckbox = CreateFrame("CheckButton", "TotemNesiaHideTotemBarCastCheckbox", optionsMenu, "UICheckButtonTemplate")
+hideTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -135)
+hideTotemBarCastCheckbox:SetWidth(24)
+hideTotemBarCastCheckbox:SetHeight(24)
+local hideTotemBarCastLabel = hideTotemBarCastCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+hideTotemBarCastLabel:SetPoint("LEFT", hideTotemBarCastCheckbox, "RIGHT", 5, 0)
+hideTotemBarCastLabel:SetText("Hide Totem Bar")
+hideTotemBarCastCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.totemBarHidden = this:GetChecked() and true or false
+    TotemNesia.UpdateTotemBar()
+end)
+
+-- LEFT SIDE: "Will be enabled when in:" section
 local enabledWhenLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-enabledWhenLabel:SetPoint("TOP", 0, -125)
+enabledWhenLabel:SetPoint("TOPLEFT", 20, -165)
 enabledWhenLabel:SetText("Will be enabled when in:")
 
--- Solo checkbox
+-- Solo checkbox (vertical stack)
 local soloCheckbox = CreateFrame("CheckButton", "TotemNesiaSoloCheckbox", optionsMenu, "UICheckButtonTemplate")
-soloCheckbox:SetPoint("TOPLEFT", 20, -145)
+soloCheckbox:SetPoint("TOPLEFT", 20, -185)
 soloCheckbox:SetWidth(24)
 soloCheckbox:SetHeight(24)
 local soloLabel = soloCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -662,7 +1191,7 @@ end)
 
 -- Parties checkbox
 local partyCheckbox = CreateFrame("CheckButton", "TotemNesiaPartyCheckbox", optionsMenu, "UICheckButtonTemplate")
-partyCheckbox:SetPoint("TOPLEFT", 120, -145)
+partyCheckbox:SetPoint("TOPLEFT", 20, -210)
 partyCheckbox:SetWidth(24)
 partyCheckbox:SetHeight(24)
 local partyLabel = partyCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -674,7 +1203,7 @@ end)
 
 -- Raids checkbox
 local raidCheckbox = CreateFrame("CheckButton", "TotemNesiaRaidCheckbox", optionsMenu, "UICheckButtonTemplate")
-raidCheckbox:SetPoint("TOPLEFT", 220, -145)
+raidCheckbox:SetPoint("TOPLEFT", 20, -235)
 raidCheckbox:SetWidth(24)
 raidCheckbox:SetHeight(24)
 local raidLabel = raidCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -684,100 +1213,88 @@ raidCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.enabledRaid = this:GetChecked() and true or false
 end)
 
--- Totem Bar Layout dropdown
+-- RIGHT SIDE: Totem Bar Layout toggle button
+local layoutButton = CreateFrame("Button", "TotemNesiaLayoutButton", optionsMenu, "UIPanelButtonTemplate")
+layoutButton:SetWidth(120)
+layoutButton:SetHeight(24)
+layoutButton:SetPoint("TOPRIGHT", -20, -179)
+layoutButton:SetText("Horizontal")  -- Default text, will be updated when options open
+
 local layoutLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-layoutLabel:SetPoint("TOP", 0, -165)
+layoutLabel:SetPoint("BOTTOM", layoutButton, "TOP", 0, 2)
 layoutLabel:SetText("Totem Bar Layout:")
 
-local layoutDropdown = CreateFrame("Frame", "TotemNesiaLayoutDropdown", optionsMenu)
-layoutDropdown:SetWidth(150)
-layoutDropdown:SetHeight(32)
-layoutDropdown:SetPoint("TOP", 0, -185)
-layoutDropdown:SetBackdrop({
-    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-    tile = true,
-    tileSize = 32,
-    edgeSize = 16,
-    insets = { left = 5, right = 5, top = 5, bottom = 5 }
-})
-layoutDropdown:SetBackdropColor(0, 0, 0, 0.9)
+-- Flyout Direction toggle button (create before layout OnClick so we can reference it)
+local flyoutButton = CreateFrame("Button", "TotemNesiaFlyoutButton", optionsMenu, "UIPanelButtonTemplate")
+flyoutButton:SetWidth(120)
+flyoutButton:SetHeight(24)
+flyoutButton:SetPoint("TOPRIGHT", -20, -229)
+flyoutButton:SetText("Up")  -- Default text, will be updated when options open
 
-local layoutText = layoutDropdown:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-layoutText:SetPoint("CENTER", 0, 0)
-layoutText:SetText("Horizontal")
+local flyoutLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+flyoutLabel:SetPoint("BOTTOM", flyoutButton, "TOP", 0, 2)
+flyoutLabel:SetText("Flyout Direction:")
 
-local layoutDropdownOpen = false
-local layoutOptions = {"Horizontal", "Vertical"}
-
-layoutDropdown:SetScript("OnMouseDown", function()
-    if layoutDropdownOpen then
-        -- Close dropdown
-        for i = 1, 2 do
-            if _G["TotemNesiaLayoutOption"..i] then
-                _G["TotemNesiaLayoutOption"..i]:Hide()
-            end
+-- Now set up layout button OnClick (after flyoutButton exists)
+layoutButton:SetScript("OnClick", function()
+    if TotemNesiaDB.totemBarLayout == "Horizontal" then
+        TotemNesiaDB.totemBarLayout = "Vertical"
+        this:SetText("Vertical")
+        -- Default to Right for vertical layout
+        TotemNesiaDB.totemBarFlyoutDirection = "Right"
+        flyoutButton:SetText("Right")
+        if TotemNesiaDB.debugMode then
+            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Layout changed to Vertical, flyout direction set to Right")
         end
-        layoutDropdownOpen = false
     else
-        -- Open dropdown
-        for i, option in ipairs(layoutOptions) do
-            local optionFrame = _G["TotemNesiaLayoutOption"..i]
-            if not optionFrame then
-                optionFrame = CreateFrame("Frame", "TotemNesiaLayoutOption"..i, layoutDropdown)
-                optionFrame:SetWidth(150)
-                optionFrame:SetHeight(20)
-                optionFrame:SetPoint("TOP", layoutDropdown, "BOTTOM", 0, -(i-1)*20)
-                optionFrame:SetBackdrop({
-                    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-                    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-                    tile = true,
-                    tileSize = 32,
-                    edgeSize = 8,
-                    insets = { left = 2, right = 2, top = 2, bottom = 2 }
-                })
-                optionFrame:SetBackdropColor(0, 0, 0, 0.9)
-                
-                local optionText = optionFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                optionText:SetPoint("CENTER", 0, 0)
-                optionText:SetText(option)
-                optionFrame.text = optionText
-                
-                optionFrame:SetScript("OnMouseDown", function()
-                    TotemNesiaDB.totemTrackerLayout = option
-                    layoutText:SetText(option)
-                    TotemNesia.UpdateTotemTracker()
-                    -- Close dropdown
-                    for j = 1, 2 do
-                        if _G["TotemNesiaLayoutOption"..j] then
-                            _G["TotemNesiaLayoutOption"..j]:Hide()
-                        end
-                    end
-                    layoutDropdownOpen = false
-                end)
-                
-                optionFrame:SetScript("OnEnter", function()
-                    optionFrame:SetBackdropColor(0.2, 0.2, 0.2, 1)
-                end)
-                
-                optionFrame:SetScript("OnLeave", function()
-                    optionFrame:SetBackdropColor(0, 0, 0, 0.9)
-                end)
-            end
-            optionFrame:Show()
+        TotemNesiaDB.totemBarLayout = "Horizontal"
+        this:SetText("Horizontal")
+        -- Default to Up for horizontal layout
+        TotemNesiaDB.totemBarFlyoutDirection = "Up"
+        flyoutButton:SetText("Up")
+        if TotemNesiaDB.debugMode then
+            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Layout changed to Horizontal, flyout direction set to Up")
         end
-        layoutDropdownOpen = true
     end
+    TotemNesia.UpdateTotemBar()
+    TotemNesia.UpdateTotemBarFlyouts()
+end)
+
+-- Set up flyout button OnClick
+flyoutButton:SetScript("OnClick", function()
+    local isVertical = (TotemNesiaDB.totemBarLayout == "Vertical")
+    
+    if isVertical then
+        -- Vertical layout: cycle between Left and Right
+        if TotemNesiaDB.totemBarFlyoutDirection == "Left" then
+            TotemNesiaDB.totemBarFlyoutDirection = "Right"
+            this:SetText("Right")
+        else
+            TotemNesiaDB.totemBarFlyoutDirection = "Left"
+            this:SetText("Left")
+        end
+    else
+        -- Horizontal layout: cycle between Up and Down
+        if TotemNesiaDB.totemBarFlyoutDirection == "Up" then
+            TotemNesiaDB.totemBarFlyoutDirection = "Down"
+            this:SetText("Down")
+        else
+            TotemNesiaDB.totemBarFlyoutDirection = "Up"
+            this:SetText("Up")
+        end
+    end
+    
+    TotemNesia.UpdateTotemBarFlyouts()
 end)
 
 -- Timer duration label
 local timerLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-timerLabel:SetPoint("TOP", 0, -220)
+timerLabel:SetPoint("TOP", 0, -260)
 timerLabel:SetText("Display Duration: 15s")
 
 -- Timer duration slider
 local timerSlider = CreateFrame("Slider", "TotemNesiaTimerSlider", optionsMenu)
-timerSlider:SetPoint("TOP", 0, -240)
+timerSlider:SetPoint("TOP", 0, -280)
 timerSlider:SetWidth(350)
 timerSlider:SetHeight(15)
 timerSlider:SetOrientation("HORIZONTAL")
@@ -808,14 +1325,115 @@ timerSlider:SetScript("OnValueChanged", function()
     timerLabel:SetText("Display Duration: " .. value .. "s")
 end)
 
+-- UI Frame Scale label
+local uiScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+uiScaleLabel:SetPoint("TOP", 0, -305)
+uiScaleLabel:SetText("UI Frame Scale: 1.0")
+
+-- UI Frame Scale slider
+local uiScaleSlider = CreateFrame("Slider", "TotemNesiaUIScaleSlider", optionsMenu)
+uiScaleSlider:SetPoint("TOP", 0, -325)
+uiScaleSlider:SetWidth(350)
+uiScaleSlider:SetHeight(15)
+uiScaleSlider:SetOrientation("HORIZONTAL")
+uiScaleSlider:SetMinMaxValues(0.5, 2.0)
+uiScaleSlider:SetValueStep(0.1)
+uiScaleSlider:SetBackdrop({
+    bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+    tile = true,
+    tileSize = 8,
+    edgeSize = 8,
+    insets = { left = 3, right = 3, top = 6, bottom = 6 }
+})
+local uiScaleThumb = uiScaleSlider:CreateTexture(nil, "OVERLAY")
+uiScaleThumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+uiScaleThumb:SetWidth(32)
+uiScaleThumb:SetHeight(32)
+uiScaleSlider:SetThumbTexture(uiScaleThumb)
+uiScaleSlider:SetScript("OnValueChanged", function()
+    local value = math.floor(this:GetValue() * 10 + 0.5) / 10
+    TotemNesiaDB.uiFrameScale = value
+    uiScaleLabel:SetText("UI Frame Scale: " .. value)
+    iconFrame:SetScale(value)
+end)
+
+-- Totem Tracker Scale label
+local trackerScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+trackerScaleLabel:SetPoint("TOP", 0, -350)
+trackerScaleLabel:SetText("Totem Tracker Scale: 1.0")
+
+-- Totem Tracker Scale slider
+local trackerScaleSlider = CreateFrame("Slider", "TotemNesiaTrackerScaleSlider", optionsMenu)
+trackerScaleSlider:SetPoint("TOP", 0, -370)
+trackerScaleSlider:SetWidth(350)
+trackerScaleSlider:SetHeight(15)
+trackerScaleSlider:SetOrientation("HORIZONTAL")
+trackerScaleSlider:SetMinMaxValues(0.5, 2.0)
+trackerScaleSlider:SetValueStep(0.1)
+trackerScaleSlider:SetBackdrop({
+    bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+    tile = true,
+    tileSize = 8,
+    edgeSize = 8,
+    insets = { left = 3, right = 3, top = 6, bottom = 6 }
+})
+local trackerScaleThumb = trackerScaleSlider:CreateTexture(nil, "OVERLAY")
+trackerScaleThumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+trackerScaleThumb:SetWidth(32)
+trackerScaleThumb:SetHeight(32)
+trackerScaleSlider:SetThumbTexture(trackerScaleThumb)
+trackerScaleSlider:SetScript("OnValueChanged", function()
+    local value = math.floor(this:GetValue() * 10 + 0.5) / 10
+    TotemNesiaDB.totemTrackerScale = value
+    trackerScaleLabel:SetText("Totem Tracker Scale: " .. value)
+    totemTracker:SetScale(value)
+end)
+
+-- Totem Bar Scale label
+local barScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+barScaleLabel:SetPoint("TOP", 0, -395)
+barScaleLabel:SetText("Totem Bar Scale: 1.0")
+
+-- Totem Bar Scale slider
+local barScaleSlider = CreateFrame("Slider", "TotemNesiaBarScaleSlider", optionsMenu)
+barScaleSlider:SetPoint("TOP", 0, -415)
+barScaleSlider:SetWidth(350)
+barScaleSlider:SetHeight(15)
+barScaleSlider:SetOrientation("HORIZONTAL")
+barScaleSlider:SetMinMaxValues(0.5, 2.0)
+barScaleSlider:SetValueStep(0.1)
+barScaleSlider:SetBackdrop({
+    bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+    tile = true,
+    tileSize = 8,
+    edgeSize = 8,
+    insets = { left = 3, right = 3, top = 6, bottom = 6 }
+})
+local barScaleThumb = barScaleSlider:CreateTexture(nil, "OVERLAY")
+barScaleThumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+barScaleThumb:SetWidth(32)
+barScaleThumb:SetHeight(32)
+barScaleSlider:SetThumbTexture(barScaleThumb)
+barScaleSlider:SetScript("OnValueChanged", function()
+    local value = math.floor(this:GetValue() * 10 + 0.5) / 10
+    TotemNesiaDB.totemBarScale = value
+    barScaleLabel:SetText("Totem Bar Scale: " .. value)
+    totemBar:SetScale(value)
+end)
+
 -- Keybind macros section
 local keybindTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-keybindTitle:SetPoint("TOP", 0, -275)
+keybindTitle:SetPoint("TOP", 0, -445)
+keybindTitle:SetWidth(360)
+keybindTitle:SetJustifyH("CENTER")
 keybindTitle:SetText("You can create a hotkey to interact with the UI element by copying the macro below:")
 
 -- Recall macro EditBox
 local keybind1 = CreateFrame("EditBox", nil, optionsMenu)
-keybind1:SetPoint("TOPLEFT", 20, -295)
+keybind1:SetPoint("TOPLEFT", 20, -465)
 keybind1:SetWidth(360)
 keybind1:SetHeight(20)
 keybind1:SetFontObject(GameFontNormalSmall)
@@ -841,6 +1459,18 @@ keybind1:SetScript("OnTextChanged", function()
         this:SetText("/script TotemNesia_RecallTotems()")
         this:HighlightText()
     end
+end)
+
+-- Debug mode checkbox (bottom right corner)
+local debugCheckbox = CreateFrame("CheckButton", "TotemNesiaDebugCheckbox", optionsMenu, "UICheckButtonTemplate")
+debugCheckbox:SetPoint("BOTTOMRIGHT", -20, 10)
+debugCheckbox:SetWidth(24)
+debugCheckbox:SetHeight(24)
+local debugLabel = debugCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+debugLabel:SetPoint("RIGHT", debugCheckbox, "LEFT", -5, 0)
+debugLabel:SetText("Debug mode")
+debugCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.debugMode = this:GetChecked() and true or false
 end)
 
 -- Update minimap button position
@@ -877,16 +1507,29 @@ minimapButton:SetScript("OnClick", function()
         lockCheckbox:SetChecked(TotemNesiaDB.isLocked)
         muteCheckbox:SetChecked(not TotemNesiaDB.audioEnabled)
         hideUICheckbox:SetChecked(TotemNesiaDB.hideUIElement)
+        enableTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarEnabled)
         lockTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerLocked)
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerHidden)
+        lockTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
+        hideTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
         soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
         partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
         raidCheckbox:SetChecked(TotemNesiaDB.enabledRaid)
         
         timerSlider:SetValue(TotemNesiaDB.timerDuration)
+        
+        uiScaleSlider:SetValue(TotemNesiaDB.uiFrameScale)
+        uiScaleLabel:SetText("UI Frame Scale: " .. TotemNesiaDB.uiFrameScale)
+        
+        trackerScaleSlider:SetValue(TotemNesiaDB.totemTrackerScale)
+        trackerScaleLabel:SetText("Totem Tracker Scale: " .. TotemNesiaDB.totemTrackerScale)
+        
+        barScaleSlider:SetValue(TotemNesiaDB.totemBarScale)
+        barScaleLabel:SetText("Totem Bar Scale: " .. TotemNesiaDB.totemBarScale)
         timerLabel:SetText("Display Duration: " .. TotemNesiaDB.timerDuration .. "s")
-        layoutText:SetText(TotemNesiaDB.totemTrackerLayout or "Horizontal")
+        layoutButton:SetText(TotemNesiaDB.totemBarLayout or "Horizontal")
+        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection or "Up")
         optionsMenu:Show()
     end
 end)
@@ -949,6 +1592,11 @@ combatFrame:SetScript("OnEvent", function()
                 
                 TotemNesia.activeTotems[totemName] = true
                 TotemNesia.totemTimestamps[totemName] = GetTime()  -- Record placement time
+                
+                -- Record totem position
+                local x, y = GetPlayerMapPosition("player")
+                TotemNesia.totemPositions[totemName] = {x = x, y = y}
+                
                 TotemNesia.hasTotems = true
                 TotemNesia.DebugPrint("Totem summoned: " .. totemName)
             else
@@ -960,6 +1608,7 @@ combatFrame:SetScript("OnEvent", function()
             -- Clear all active totems
             TotemNesia.activeTotems = {}
             TotemNesia.totemTimestamps = {}  -- Clear timestamps too
+            TotemNesia.totemPositions = {}  -- Clear positions too
             TotemNesia.hasTotems = false
             TotemNesia.monitoringForRecall = false
             TotemNesia.monitorTimer = 0
@@ -990,6 +1639,7 @@ combatFrame:SetScript("OnEvent", function()
         if string.find(arg1, "Totemic Recall") then
             TotemNesia.activeTotems = {}
             TotemNesia.totemTimestamps = {}
+            TotemNesia.totemPositions = {}
             TotemNesia.hasTotems = false
             TotemNesia.DebugPrint("Totemic Recall faded - totems gone")
         elseif string.find(arg1, "Totem") then
@@ -997,6 +1647,7 @@ combatFrame:SetScript("OnEvent", function()
             local totemName = string.gsub(arg1, "(.+) fades from you%.", "%1")
             TotemNesia.activeTotems[totemName] = nil
             TotemNesia.totemTimestamps[totemName] = nil
+            TotemNesia.totemPositions[totemName] = nil
             TotemNesia.DebugPrint("Totem faded: " .. totemName)
             
             -- Check if any totems left
@@ -1059,12 +1710,26 @@ eventFrame:SetScript("OnEvent", function()
         TotemNesia.InitDB()
         TotemNesia.UpdateMinimapButton()
         TotemNesia.UpdateTotemTracker()
+        TotemNesia.UpdateTotemBar()
+        TotemNesia.UpdateTotemBarFlyouts()
+        
+        -- Apply scales
+        iconFrame:SetScale(TotemNesiaDB.uiFrameScale)
+        totemTracker:SetScale(TotemNesiaDB.totemTrackerScale)
+        totemBar:SetScale(TotemNesiaDB.totemBarScale)
         
         -- Set Totem Tracker mouse state based on lock setting
         if TotemNesiaDB.totemTrackerLocked then
             totemTracker:EnableMouse(false)
         else
             totemTracker:EnableMouse(true)
+        end
+        
+        -- Set Totem Bar mouse state based on lock setting
+        if TotemNesiaDB.totemBarLocked then
+            totemBar:EnableMouse(false)
+        else
+            totemBar:EnableMouse(true)
         end
         
         if TotemNesiaDB.minimapHidden then
@@ -1147,6 +1812,21 @@ timerFrame:SetScript("OnUpdate", function()
             TotemNesia.DebugPrint("Monitor timeout - assuming totems recalled or expired")
         end
     end
+    
+    -- Check distance from totems periodically
+    TotemNesia.distanceCheckTimer = TotemNesia.distanceCheckTimer + arg1
+    if TotemNesia.distanceCheckTimer >= DISTANCE_CHECK_INTERVAL then
+        TotemNesia.distanceCheckTimer = 0
+        
+        if TotemNesia.hasTotems and TotemNesia.CheckTotemDistance() then
+            -- Player is too far from totems - show UI
+            if not iconFrame:IsVisible() then
+                iconFrame:Show()
+                TotemNesia.displayTimer = TotemNesiaDB.timerDuration
+                TotemNesia.DebugPrint("Too far from totems - UI shown")
+            end
+        end
+    end
 end)
 
 -- Slash commands
@@ -1173,16 +1853,29 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
         lockCheckbox:SetChecked(TotemNesiaDB.isLocked)
         muteCheckbox:SetChecked(not TotemNesiaDB.audioEnabled)
         hideUICheckbox:SetChecked(TotemNesiaDB.hideUIElement)
+        enableTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarEnabled)
         lockTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerLocked)
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerHidden)
+        lockTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
+        hideTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
         soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
         partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
         raidCheckbox:SetChecked(TotemNesiaDB.enabledRaid)
         
         timerSlider:SetValue(TotemNesiaDB.timerDuration)
+        
+        uiScaleSlider:SetValue(TotemNesiaDB.uiFrameScale)
+        uiScaleLabel:SetText("UI Frame Scale: " .. TotemNesiaDB.uiFrameScale)
+        
+        trackerScaleSlider:SetValue(TotemNesiaDB.totemTrackerScale)
+        trackerScaleLabel:SetText("Totem Tracker Scale: " .. TotemNesiaDB.totemTrackerScale)
+        
+        barScaleSlider:SetValue(TotemNesiaDB.totemBarScale)
+        barScaleLabel:SetText("Totem Bar Scale: " .. TotemNesiaDB.totemBarScale)
         timerLabel:SetText("Display Duration: " .. TotemNesiaDB.timerDuration .. "s")
-        layoutText:SetText(TotemNesiaDB.totemTrackerLayout or "Horizontal")
+        layoutButton:SetText(TotemNesiaDB.totemBarLayout or "Horizontal")
+        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection or "Up")
         optionsMenu:Show()
     end
 end
