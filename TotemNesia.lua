@@ -55,6 +55,15 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.totemBarLocked == nil then
         TotemNesiaDB.totemBarLocked = true
     end
+    if TotemNesiaDB.enabledSolo == nil then
+        TotemNesiaDB.enabledSolo = true
+    end
+    if TotemNesiaDB.enabledParty == nil then
+        TotemNesiaDB.enabledParty = true
+    end
+    if TotemNesiaDB.enabledRaid == nil then
+        TotemNesiaDB.enabledRaid = true
+    end
 end
 
 -- Create the icon frame
@@ -197,6 +206,20 @@ end)
 function TotemNesia.DebugPrint(msg)
     if TotemNesiaDB.debugMode then
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia DEBUG: " .. msg)
+    end
+end
+
+-- Function to check if addon should be active based on group settings
+function TotemNesia.IsAddonEnabled()
+    local inRaid = GetNumRaidMembers() > 0
+    local inParty = GetNumPartyMembers() > 0
+    
+    if inRaid then
+        return TotemNesiaDB.enabledRaid
+    elseif inParty then
+        return TotemNesiaDB.enabledParty
+    else
+        return TotemNesiaDB.enabledSolo
     end
 end
 
@@ -461,7 +484,7 @@ minimapBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 -- Create options menu frame
 local optionsMenu = CreateFrame("Frame", "TotemNesiaOptionsMenu", UIParent)
 optionsMenu:SetWidth(400)
-optionsMenu:SetHeight(260)
+optionsMenu:SetHeight(300)
 optionsMenu:SetPoint("CENTER", UIParent, "CENTER")
 optionsMenu:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -603,14 +626,55 @@ debugCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.debugMode = this:GetChecked() and true or false
 end)
 
+-- "Will be enabled when in:" section
+local enabledWhenLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+enabledWhenLabel:SetPoint("TOP", 0, -125)
+enabledWhenLabel:SetText("Will be enabled when in:")
+
+-- Solo checkbox
+local soloCheckbox = CreateFrame("CheckButton", "TotemNesiaSoloCheckbox", optionsMenu, "UICheckButtonTemplate")
+soloCheckbox:SetPoint("TOPLEFT", 20, -145)
+soloCheckbox:SetWidth(24)
+soloCheckbox:SetHeight(24)
+local soloLabel = soloCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+soloLabel:SetPoint("LEFT", soloCheckbox, "RIGHT", 5, 0)
+soloLabel:SetText("Solo")
+soloCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.enabledSolo = this:GetChecked() and true or false
+end)
+
+-- Parties checkbox
+local partyCheckbox = CreateFrame("CheckButton", "TotemNesiaPartyCheckbox", optionsMenu, "UICheckButtonTemplate")
+partyCheckbox:SetPoint("TOPLEFT", 120, -145)
+partyCheckbox:SetWidth(24)
+partyCheckbox:SetHeight(24)
+local partyLabel = partyCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+partyLabel:SetPoint("LEFT", partyCheckbox, "RIGHT", 5, 0)
+partyLabel:SetText("Parties")
+partyCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.enabledParty = this:GetChecked() and true or false
+end)
+
+-- Raids checkbox
+local raidCheckbox = CreateFrame("CheckButton", "TotemNesiaRaidCheckbox", optionsMenu, "UICheckButtonTemplate")
+raidCheckbox:SetPoint("TOPLEFT", 220, -145)
+raidCheckbox:SetWidth(24)
+raidCheckbox:SetHeight(24)
+local raidLabel = raidCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+raidLabel:SetPoint("LEFT", raidCheckbox, "RIGHT", 5, 0)
+raidLabel:SetText("Raids")
+raidCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.enabledRaid = this:GetChecked() and true or false
+end)
+
 -- Timer duration label
 local timerLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-timerLabel:SetPoint("TOP", 0, -145)
+timerLabel:SetPoint("TOP", 0, -175)
 timerLabel:SetText("Display Duration: 15s")
 
 -- Timer duration slider
 local timerSlider = CreateFrame("Slider", "TotemNesiaTimerSlider", optionsMenu)
-timerSlider:SetPoint("TOP", 0, -165)
+timerSlider:SetPoint("TOP", 0, -195)
 timerSlider:SetWidth(350)
 timerSlider:SetHeight(15)
 timerSlider:SetOrientation("HORIZONTAL")
@@ -643,12 +707,12 @@ end)
 
 -- Keybind macros section
 local keybindTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-keybindTitle:SetPoint("TOP", 0, -200)
+keybindTitle:SetPoint("TOP", 0, -230)
 keybindTitle:SetText("You can create a hotkey to interact with the UI element by copying the macro below:")
 
 -- Recall macro EditBox
 local keybind1 = CreateFrame("EditBox", nil, optionsMenu)
-keybind1:SetPoint("TOPLEFT", 20, -220)
+keybind1:SetPoint("TOPLEFT", 20, -250)
 keybind1:SetWidth(360)
 keybind1:SetHeight(20)
 keybind1:SetFontObject(GameFontNormalSmall)
@@ -713,6 +777,10 @@ minimapButton:SetScript("OnClick", function()
         lockTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
+        soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
+        partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
+        raidCheckbox:SetChecked(TotemNesiaDB.enabledRaid)
+        
         timerSlider:SetValue(TotemNesiaDB.timerDuration)
         timerLabel:SetText("Display Duration: " .. TotemNesiaDB.timerDuration .. "s")
         optionsMenu:Show()
@@ -758,6 +826,11 @@ combatFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE")
 combatFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_SELF")
 combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 combatFrame:SetScript("OnEvent", function()
+    -- Check if addon is enabled for current group type
+    if not TotemNesia.IsAddonEnabled() then
+        return
+    end
+    
     if event == "CHAT_MSG_SPELL_SELF_BUFF" then
         -- Check for totem summons - format varies
         if string.find(arg1, "Totem") and not string.find(arg1, "Totemic Recall") then
@@ -907,6 +980,12 @@ eventFrame:SetScript("OnEvent", function()
         TotemNesia.inCombat = false
         TotemNesia.DebugPrint("Left combat - hasTotems: " .. tostring(TotemNesia.hasTotems))
         
+        -- Check if addon is enabled for current group type
+        if not TotemNesia.IsAddonEnabled() then
+            TotemNesia.DebugPrint("Addon disabled for current group type")
+            return
+        end
+        
         if IsShaman() and HasTotemsOut() then
             -- Only show UI element if not hidden by setting
             if not TotemNesiaDB.hideUIElement then
@@ -993,6 +1072,10 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
         lockTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
+        soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
+        partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
+        raidCheckbox:SetChecked(TotemNesiaDB.enabledRaid)
+        
         timerSlider:SetValue(TotemNesiaDB.timerDuration)
         timerLabel:SetText("Display Duration: " .. TotemNesiaDB.timerDuration .. "s")
         optionsMenu:Show()
