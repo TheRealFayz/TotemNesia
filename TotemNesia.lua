@@ -1018,13 +1018,14 @@ table.insert(UISpecialFrames, "TotemNesiaOptionsMenu")
 -- Options menu title
 local menuTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 menuTitle:SetPoint("TOP", 0, -15)
-menuTitle:SetText("TotemNesia Options")
+menuTitle:SetText("TotemNesia V3.0")
+menuTitle:SetTextColor(1, 0.82, 0, 1)  -- Yellow color
 
--- Version number
-local versionText = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-versionText:SetPoint("TOP", 0, -35)
-versionText:SetText("v3.0")
-versionText:SetTextColor(0.7, 0.7, 0.7, 1)
+-- Author credit (smaller text below title)
+local authorText = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+authorText:SetPoint("TOP", menuTitle, "BOTTOM", 0, -2)
+authorText:SetText("By Fayz of Nordanaar")
+authorText:SetTextColor(1, 1, 1, 1)  -- White color
 
 -- Close button (X in upper right)
 local closeButton = CreateFrame("Button", nil, optionsMenu)
