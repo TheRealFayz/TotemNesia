@@ -63,6 +63,11 @@ Access all settings by clicking the minimap button, or typing `/tn`:
 - **Hide Totem Tracker** - Completely hide the totem tracker if you prefer not to use it
 - **Debug mode** - Enable detailed logging for troubleshooting
 
+### Will be enabled when in
+- **Solo** - Enable/disable addon when playing solo
+- **Parties** - Enable/disable addon when in a 5-man party
+- **Raids** - Enable/disable addon when in a raid group
+
 ### Display Duration Slider
 - Adjust how long the Totemic Recall icon stays visible (15-60 seconds)
 - Move the slider to your preferred duration
@@ -89,6 +94,13 @@ Access all settings by clicking the minimap button, or typing `/tn`:
 - **No configuration needed**: Just drop totems and they appear
 - **Position anywhere**: Unlock and drag to your preferred location
 - **Hide if desired**: Check "Hide Totem Tracker" if you prefer the elemental indicators only
+
+### Group Type Controls
+Use the "Will be enabled when in" checkboxes to control when the addon is active:
+- Uncheck "Solo" to disable when not in a group
+- Uncheck "Parties" to disable in 5-man groups
+- Uncheck "Raids" to disable in raid groups
+- All options are enabled by default
 
 ### Audio-Only Mode
 For experienced players who want minimal UI:
@@ -154,6 +166,7 @@ Both UI elements can be positioned independently:
 - Verify you actually placed totems during or before combat
 - Enable debug mode to see if totems are being detected
 - Check if "Hide UI element" is enabled in options
+- Verify the addon is enabled for your current group type (Solo/Parties/Raids)
 
 **The totem tracker isn't showing my totems**
 - Make sure "Hide Totem Tracker" is unchecked in options
@@ -179,6 +192,11 @@ Both UI elements can be positioned independently:
 - Enable debug mode to see how totems are being categorized
 - Make sure you're using the standard totem names (not renamed by other addons)
 - Some totems may be categorized unexpectedly - report these as bugs
+
+**The addon isn't working in my group**
+- Check the "Will be enabled when in" settings
+- Make sure the checkbox for your current group type (Solo/Parties/Raids) is checked
+- All options are enabled by default
 
 ## Contributing
 
