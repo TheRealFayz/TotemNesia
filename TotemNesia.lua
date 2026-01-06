@@ -380,8 +380,8 @@ TotemNesia.totemLists = {
         "Fire Nova Totem",
         "Magma Totem",
         "Frost Resistance Totem",
-        "Flametongue Totem",
-        "Totem of Wrath"
+        "Flametongue Totem"
+        -- Totem of Wrath removed (doesn't exist on Turtle WoW)
     },
     earth = {
         "Stoneclaw Totem",
@@ -395,8 +395,8 @@ TotemNesia.totemLists = {
         "Mana Spring Totem",
         "Fire Resistance Totem",
         "Disease Cleansing Totem",
-        "Poison Cleansing Totem",
-        "Mana Tide Totem"
+        "Poison Cleansing Totem"
+        -- Mana Tide Totem removed (doesn't exist on Turtle WoW)
     },
     air = {
         "Grounding Totem",
@@ -600,13 +600,11 @@ for i, element in ipairs(elementOrder) do
     slot:SetScript("OnEnter", function()
         this.flyout:Show()
         this.flyout.hideTime = nil  -- Cancel any pending hide
-        this.flyout.slotEntered = true
     end)
     
     slot:SetScript("OnLeave", function()
         -- Start 1 second timer before hiding
         this.flyout.hideTime = GetTime() + 1
-        this.flyout.slotEntered = false
     end)
     
     -- Keep flyout open when mouse is over it
@@ -622,18 +620,25 @@ for i, element in ipairs(elementOrder) do
     
     -- Update handler that always runs to check hide timer
     flyout:SetScript("OnUpdate", function(elapsed)
+        -- Always check if we should hide, regardless of timer
+        local shouldBeVisible = MouseIsOver(flyout) or MouseIsOver(slot)
+        
         if this.hideTime then
             local timeNow = GetTime()
             if timeNow >= this.hideTime then
-                -- Check if mouse is over flyout or slot
-                if not MouseIsOver(this) and not this.slotEntered then
+                -- Timer expired - hide if mouse not over slot or flyout
+                if not shouldBeVisible then
                     this:Hide()
                     this.hideTime = nil
-                    this.slotEntered = false
                 else
-                    -- Mouse came back, cancel hide
+                    -- Mouse is still over something, keep it open
                     this.hideTime = nil
                 end
+            end
+        else
+            -- No timer, but if mouse isn't over anything, start hiding timer
+            if this:IsVisible() and not shouldBeVisible then
+                this.hideTime = GetTime() + 1
             end
         end
     end)
@@ -1051,14 +1056,14 @@ closeButton:SetScript("OnClick", function()
 end)
 
 -- LEFT COLUMN
--- Lock UI Frame checkbox
+-- Lock Recall Notification checkbox
 local lockCheckbox = CreateFrame("CheckButton", "TotemNesiaLockCheckbox", optionsMenu, "UICheckButtonTemplate")
 lockCheckbox:SetPoint("TOPLEFT", 20, -45)
 lockCheckbox:SetWidth(24)
 lockCheckbox:SetHeight(24)
 local lockLabel = lockCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 lockLabel:SetPoint("LEFT", lockCheckbox, "RIGHT", 5, 0)
-lockLabel:SetText("Lock UI Frame")
+lockLabel:SetText("Lock Recall Notification")
 lockCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.isLocked = this:GetChecked() and true or false
     if TotemNesiaDB.isLocked then
@@ -1087,14 +1092,14 @@ muteCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.audioEnabled = not this:GetChecked()
 end)
 
--- Hide UI element checkbox
+-- Hide Recall Notification checkbox
 local hideUICheckbox = CreateFrame("CheckButton", "TotemNesiaHideUICheckbox", optionsMenu, "UICheckButtonTemplate")
 hideUICheckbox:SetPoint("TOPLEFT", 20, -105)
 hideUICheckbox:SetWidth(24)
 hideUICheckbox:SetHeight(24)
 local hideUILabel = hideUICheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 hideUILabel:SetPoint("LEFT", hideUICheckbox, "RIGHT", 5, 0)
-hideUILabel:SetText("Hide UI element")
+hideUILabel:SetText("Hide Recall Notification")
 hideUICheckbox:SetScript("OnClick", function()
     TotemNesiaDB.hideUIElement = this:GetChecked() and true or false
 end)
@@ -1326,12 +1331,12 @@ timerSlider:SetScript("OnValueChanged", function()
     timerLabel:SetText("Display Duration: " .. value .. "s")
 end)
 
--- UI Frame Scale label
+-- Recall Notification Scale label
 local uiScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 uiScaleLabel:SetPoint("TOP", 0, -305)
-uiScaleLabel:SetText("UI Frame Scale: 1.0")
+uiScaleLabel:SetText("Recall Notification Scale: 1.0")
 
--- UI Frame Scale slider
+-- Recall Notification Scale slider
 local uiScaleSlider = CreateFrame("Slider", "TotemNesiaUIScaleSlider", optionsMenu)
 uiScaleSlider:SetPoint("TOP", 0, -325)
 uiScaleSlider:SetWidth(350)
@@ -1355,7 +1360,7 @@ uiScaleSlider:SetThumbTexture(uiScaleThumb)
 uiScaleSlider:SetScript("OnValueChanged", function()
     local value = math.floor(this:GetValue() * 10 + 0.5) / 10
     TotemNesiaDB.uiFrameScale = value
-    uiScaleLabel:SetText("UI Frame Scale: " .. value)
+    uiScaleLabel:SetText("Recall Notification Scale: " .. value)
     iconFrame:SetScale(value)
 end)
 
@@ -1521,7 +1526,7 @@ minimapButton:SetScript("OnClick", function()
         timerSlider:SetValue(TotemNesiaDB.timerDuration)
         
         uiScaleSlider:SetValue(TotemNesiaDB.uiFrameScale)
-        uiScaleLabel:SetText("UI Frame Scale: " .. TotemNesiaDB.uiFrameScale)
+        uiScaleLabel:SetText("Recall Notification Scale: " .. TotemNesiaDB.uiFrameScale)
         
         trackerScaleSlider:SetValue(TotemNesiaDB.totemTrackerScale)
         trackerScaleLabel:SetText("Totem Tracker Scale: " .. TotemNesiaDB.totemTrackerScale)
@@ -1867,7 +1872,7 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
         timerSlider:SetValue(TotemNesiaDB.timerDuration)
         
         uiScaleSlider:SetValue(TotemNesiaDB.uiFrameScale)
-        uiScaleLabel:SetText("UI Frame Scale: " .. TotemNesiaDB.uiFrameScale)
+        uiScaleLabel:SetText("Recall Notification Scale: " .. TotemNesiaDB.uiFrameScale)
         
         trackerScaleSlider:SetValue(TotemNesiaDB.totemTrackerScale)
         trackerScaleLabel:SetText("Totem Tracker Scale: " .. TotemNesiaDB.totemTrackerScale)
