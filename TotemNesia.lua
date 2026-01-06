@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.0.1
+-- Version 3.0.2
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -539,6 +539,7 @@ for i, element in ipairs(elementOrder) do
         
         button.totemName = totemName
         button.element = element  -- Store element for use in OnClick
+        button.iconTexture = btnIcon  -- Store reference to icon texture for refreshing
         
         -- Tooltip on hover
         button:SetScript("OnEnter", function()
@@ -845,6 +846,23 @@ end)
 
 -- Totem Tracker icons storage
 TotemNesia.totemTrackerIcons = {}
+
+-- Function to refresh flyout menu icons (called after login to ensure spellbook is loaded)
+function TotemNesia.RefreshFlyoutIcons()
+    for element, slot in pairs(TotemNesia.totemBarSlots) do
+        if slot.flyout then
+            -- Get all child buttons from the flyout
+            local children = {slot.flyout:GetChildren()}
+            for _, child in ipairs(children) do
+                if child.totemName and child.iconTexture then
+                    -- Refresh the icon texture from spellbook
+                    local iconPath = GetTotemIcon(child.totemName)
+                    child.iconTexture:SetTexture(iconPath)
+                end
+            end
+        end
+    end
+end
 
 -- Function to update Totem Tracker display
 function TotemNesia.UpdateTotemTracker()
@@ -1718,6 +1736,9 @@ eventFrame:SetScript("OnEvent", function()
         TotemNesia.UpdateTotemTracker()
         TotemNesia.UpdateTotemBar()
         TotemNesia.UpdateTotemBarFlyouts()
+        
+        -- Refresh flyout icons now that spellbook is loaded
+        TotemNesia.RefreshFlyoutIcons()
         
         -- Apply scales
         iconFrame:SetScale(TotemNesiaDB.uiFrameScale)
