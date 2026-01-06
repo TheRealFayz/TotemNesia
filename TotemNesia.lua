@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.0
+-- Version 3.0.1
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
