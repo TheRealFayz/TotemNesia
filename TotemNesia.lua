@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.0.2
+-- Version 3.1
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -285,21 +285,77 @@ local function GetTotemIcon(totemName)
     return "Interface\\Icons\\Spell_Nature_Reincarnation"
 end
 
+-- Totem duration table (base durations without Totemic Mastery talent)
+local totemDurations = {
+    -- Fire Totems
+    ["Flametongue Totem"] = 120,
+    ["Frost Resistance Totem"] = 120,
+    ["Magma Totem"] = 20,
+    ["Fire Nova Totem"] = 5,
+    ["Searing Totem"] = 30,
+    
+    -- Earth Totems
+    ["Tremor Totem"] = 120,
+    ["Strength of Earth Totem"] = 120,
+    ["Earthbind Totem"] = 45,
+    ["Stoneskin Totem"] = 120,
+    ["Stoneclaw Totem"] = 15,
+    
+    -- Water Totems
+    ["Poison Cleansing Totem"] = 120,
+    ["Disease Cleansing Totem"] = 120,
+    ["Fire Resistance Totem"] = 120,
+    ["Mana Spring Totem"] = 60,
+    ["Healing Stream Totem"] = 60,
+    
+    -- Air Totems
+    ["Windfall Totem"] = 120,
+    ["Tranquil Air Totem"] = 120,
+    ["Nature Resistance Totem"] = 120,
+    ["Grace of Air Totem"] = 120,
+    ["Windfury Totem"] = 120,
+    ["Grounding Totem"] = 45
+}
+
+-- Totems that are NOT affected by Totemic Mastery (damage/utility totems)
+local totemMasteryExceptions = {
+    ["Magma Totem"] = true,
+    ["Fire Nova Totem"] = true,
+    ["Searing Totem"] = true,
+    ["Earthbind Totem"] = true,
+    ["Stoneclaw Totem"] = true
+}
+
+-- Function to check if player has Totemic Mastery talent
+local function HasTotemicMastery()
+    local numTabs = GetNumTalentTabs()
+    for t = 1, numTabs do
+        local numTalents = GetNumTalents(t)
+        for i = 1, numTalents do
+            local name, _, _, _, rank = GetTalentInfo(t, i)
+            if name == "Totemic Mastery" and rank > 0 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- Function to get totem duration in seconds
 local function GetTotemDuration(totemName)
-    -- Most totems last 2 minutes (120 seconds)
-    -- Some exceptions:
-    if string.find(totemName, "Earthbind") or string.find(totemName, "Stoneclaw") then
-        return 45  -- 45 seconds
-    elseif string.find(totemName, "Grounding") then
-        return 45  -- 45 seconds
-    elseif string.find(totemName, "Fire Nova") then
-        return 5   -- 5 seconds (though we ignore this totem)
-    elseif string.find(totemName, "Searing") then
-        return 55  -- 55 seconds (rank dependent, using average)
+    local baseDuration = totemDurations[totemName]
+    
+    -- If totem not in table, default to 120 seconds
+    if not baseDuration then
+        baseDuration = 120
     end
-    -- Default duration for most totems
-    return 120
+    
+    -- Apply Totemic Mastery talent (+20% duration) to helpful totems only
+    if HasTotemicMastery() and not totemMasteryExceptions[totemName] then
+        baseDuration = baseDuration * 1.2
+    end
+    
+    return baseDuration
 end
 
 -- Function to get totem element type
@@ -1614,6 +1670,22 @@ combatFrame:SetScript("OnEvent", function()
                 totemName = string.gsub(totemName, "You gain ", "")
                 totemName = string.gsub(totemName, "%.", "")
                 
+                -- Get the element of the new totem
+                local newElement = GetTotemElement(totemName)
+                
+                -- Remove any existing totem of the same element
+                if newElement then
+                    for existingTotem, _ in pairs(TotemNesia.activeTotems) do
+                        if GetTotemElement(existingTotem) == newElement then
+                            TotemNesia.activeTotems[existingTotem] = nil
+                            TotemNesia.totemTimestamps[existingTotem] = nil
+                            TotemNesia.totemPositions[existingTotem] = nil
+                            TotemNesia.DebugPrint("Removed old " .. newElement .. " totem: " .. existingTotem)
+                        end
+                    end
+                end
+                
+                -- Add the new totem
                 TotemNesia.activeTotems[totemName] = true
                 TotemNesia.totemTimestamps[totemName] = GetTime()  -- Record placement time
                 
