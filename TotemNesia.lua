@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.1
+-- Version 3.2
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -1108,23 +1108,15 @@ authorText:SetTextColor(1, 1, 1, 1)  -- White color
 
 -- Close button (X in upper right)
 local closeButton = CreateFrame("Button", nil, optionsMenu)
-closeButton:SetWidth(20)
-closeButton:SetHeight(20)
-closeButton:SetPoint("TOPRIGHT", -10, -10)
+closeButton:SetWidth(32)
+closeButton:SetHeight(32)
+closeButton:SetPoint("TOPRIGHT", -5, -5)
 
--- Create X texture
-local closeText = closeButton:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-closeText:SetPoint("CENTER", 0, 0)
-closeText:SetText("X")
-closeText:SetTextColor(1, 0.2, 0.2)
+-- Use the standard UI close button textures
+closeButton:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+closeButton:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+closeButton:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
 
--- Hover effect
-closeButton:SetScript("OnEnter", function()
-    closeText:SetTextColor(1, 0, 0)
-end)
-closeButton:SetScript("OnLeave", function()
-    closeText:SetTextColor(1, 0.2, 0.2)
-end)
 closeButton:SetScript("OnClick", function()
     optionsMenu:Hide()
 end)
