@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.2
+-- Version 3.3
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -1644,6 +1644,7 @@ combatFrame:RegisterEvent("CHAT_MSG_SPELL_SELF_BUFF")
 combatFrame:RegisterEvent("CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE")
 combatFrame:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_SELF")
 combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+combatFrame:RegisterEvent("PLAYER_DEAD")
 combatFrame:SetScript("OnEvent", function()
     -- Check if addon is enabled for current group type
     if not TotemNesia.IsAddonEnabled() then
@@ -1686,6 +1687,13 @@ combatFrame:SetScript("OnEvent", function()
                 TotemNesia.totemPositions[totemName] = {x = x, y = y}
                 
                 TotemNesia.hasTotems = true
+                
+                -- Hide distance warning if it was showing (new totems placed, so player is now near totems)
+                if iconFrame:IsVisible() and not TotemNesia.displayTimer then
+                    iconFrame:Hide()
+                    TotemNesia.DebugPrint("Distance warning cleared - new totems placed")
+                end
+                
                 TotemNesia.DebugPrint("Totem summoned: " .. totemName)
             else
                 TotemNesia.DebugPrint("Fire Nova Totem ignored (self-destructs)")
@@ -1756,6 +1764,18 @@ combatFrame:SetScript("OnEvent", function()
             TotemNesia.monitorTimer = 60  -- Monitor for 60 seconds after combat
             TotemNesia.DebugPrint("UI hidden mode - monitoring for manual Totemic Recall")
         end
+    elseif event == "PLAYER_DEAD" then
+        -- Player died - all totems despawn
+        TotemNesia.activeTotems = {}
+        TotemNesia.totemTimestamps = {}
+        TotemNesia.totemPositions = {}
+        TotemNesia.hasTotems = false
+        TotemNesia.monitoringForRecall = false
+        TotemNesia.monitorTimer = 0
+        iconFrame:Hide()
+        TotemNesia.displayTimer = nil
+        timerText:SetText("")
+        TotemNesia.DebugPrint("Player died - all totems cleared")
     end
 end)
 
