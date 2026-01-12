@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.3
+-- Version 3.4
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -1688,10 +1688,14 @@ combatFrame:SetScript("OnEvent", function()
                 
                 TotemNesia.hasTotems = true
                 
-                -- Hide distance warning if it was showing (new totems placed, so player is now near totems)
-                if iconFrame:IsVisible() and not TotemNesia.displayTimer then
+                -- Hide recall notification if showing - player replaced totems instead of recalling
+                if iconFrame:IsVisible() then
                     iconFrame:Hide()
-                    TotemNesia.DebugPrint("Distance warning cleared - new totems placed")
+                    TotemNesia.displayTimer = nil
+                    timerText:SetText("")
+                    TotemNesia.monitoringForRecall = false
+                    TotemNesia.monitorTimer = 0
+                    TotemNesia.DebugPrint("Recall notification cleared - new totems placed")
                 end
                 
                 TotemNesia.DebugPrint("Totem summoned: " .. totemName)
