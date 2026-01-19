@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.5
+-- Version 3.7
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -61,7 +61,28 @@ function TotemNesia.InitDB()
         TotemNesiaDB.timerDuration = 15
     end
     if TotemNesiaDB.hideUIElement == nil then
-        TotemNesiaDB.hideUIElement = false
+        -- Auto-hide until level 10 and has Totemic Recall
+        local playerLevel = UnitLevel("player")
+        local hasTotemicRecall = false
+        
+        -- Check if player has Totemic Recall spell
+        local i = 1
+        while true do
+            local spellName = GetSpellName(i, BOOKTYPE_SPELL)
+            if not spellName then break end
+            if spellName == "Totemic Recall" then
+                hasTotemicRecall = true
+                break
+            end
+            i = i + 1
+        end
+        
+        -- Auto-hide if under level 10 or doesn't have the spell yet
+        if playerLevel < 10 or not hasTotemicRecall then
+            TotemNesiaDB.hideUIElement = true
+        else
+            TotemNesiaDB.hideUIElement = false
+        end
     end
     if TotemNesiaDB.totemTrackerLocked == nil then
         TotemNesiaDB.totemTrackerLocked = true
@@ -1830,6 +1851,7 @@ eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
+eventFrame:RegisterEvent("SPELLS_CHANGED")  -- Fires when player learns new spells
 
 eventFrame:SetScript("OnEvent", function()
     if event == "PLAYER_LOGIN" then
@@ -1913,6 +1935,10 @@ eventFrame:SetScript("OnEvent", function()
             -- Refresh flyout icons in case spellbook changed (new totems learned, respec, etc.)
             TotemNesia.RefreshFlyoutIcons()
         end
+    
+    elseif event == "SPELLS_CHANGED" then
+        -- Spellbook changed (learned new spell, respec, etc.) - refresh flyout icons
+        TotemNesia.RefreshFlyoutIcons()
     end
 end)
 
