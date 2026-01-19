@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.4
+-- Version 3.5
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -537,6 +537,9 @@ for i, element in ipairs(elementOrder) do
     -- Element identifier
     slot.element = element
     
+    -- Enable mouse interaction for dragging
+    slot:EnableMouse(true)
+    
     -- Store slot reference
     TotemNesia.totemBarSlots[element] = slot
     
@@ -706,6 +709,17 @@ for i, element in ipairs(elementOrder) do
         if this.selectedTotem then
             CastSpellByName(this.selectedTotem)
         end
+    end)
+    
+    -- Make slot draggable and propagate to parent totemBar
+    slot:RegisterForDrag("LeftButton")
+    slot:SetScript("OnDragStart", function()
+        if not TotemNesiaDB.totemBarLocked then
+            totemBar:StartMoving()
+        end
+    end)
+    slot:SetScript("OnDragStop", function()
+        totemBar:StopMovingOrSizing()
     end)
 end
 
