@@ -1909,6 +1909,9 @@ eventFrame:SetScript("OnEvent", function()
         -- Additional safety check (though we already return early if not Shaman)
         if not IsShaman() then
             this:UnregisterAllEvents()
+        else
+            -- Refresh flyout icons in case spellbook changed (new totems learned, respec, etc.)
+            TotemNesia.RefreshFlyoutIcons()
         end
     end
 end)
