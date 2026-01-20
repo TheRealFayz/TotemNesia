@@ -774,6 +774,27 @@ function TotemNesia.CheckTotemDistance()
     return false
 end
 
+-- Function to check if player has Totemic Recall spell and is high enough level
+function TotemNesia.CanUseTotemicRecall()
+    -- Check level requirement
+    if UnitLevel("player") < 10 then
+        return false
+    end
+    
+    -- Check if player has Totemic Recall spell
+    local i = 1
+    while true do
+        local spellName = GetSpellName(i, BOOKTYPE_SPELL)
+        if not spellName then break end
+        if spellName == "Totemic Recall" then
+            return true
+        end
+        i = i + 1
+    end
+    
+    return false
+end
+
 -- Function to update Totem Bar display and timers
 function TotemNesia.UpdateTotemBar()
     if not TotemNesiaDB.totemBarEnabled or TotemNesiaDB.totemBarHidden then
@@ -1907,15 +1928,19 @@ eventFrame:SetScript("OnEvent", function()
         end
         
         if IsShaman() and HasTotemsOut() then
-            -- Only show UI element if not hidden by setting
-            if not TotemNesiaDB.hideUIElement then
+            -- Only show UI element if not hidden by setting AND player can use Totemic Recall
+            if not TotemNesiaDB.hideUIElement and TotemNesia.CanUseTotemicRecall() then
                 TotemNesia.displayTimer = TotemNesiaDB.timerDuration
                 iconFrame:Show()
                 iconFrame:SetAlpha(1)
                 iconFrame:RegisterForClicks("LeftButtonUp")
                 TotemNesia.DebugPrint("Showing recall icon")
             else
-                TotemNesia.DebugPrint("UI element hidden by setting - skipping display")
+                if not TotemNesia.CanUseTotemicRecall() then
+                    TotemNesia.DebugPrint("Player cannot use Totemic Recall yet - skipping display")
+                else
+                    TotemNesia.DebugPrint("UI element hidden by setting - skipping display")
+                end
             end
             
             -- Play audio regardless of UI element visibility
@@ -1977,8 +2002,8 @@ timerFrame:SetScript("OnUpdate", function()
         TotemNesia.distanceCheckTimer = 0
         
         if TotemNesia.hasTotems and TotemNesia.CheckTotemDistance() then
-            -- Player is too far from totems - show UI
-            if not iconFrame:IsVisible() then
+            -- Player is too far from totems - show UI only if they can use Totemic Recall
+            if not iconFrame:IsVisible() and TotemNesia.CanUseTotemicRecall() then
                 iconFrame:Show()
                 TotemNesia.displayTimer = TotemNesiaDB.timerDuration
                 TotemNesia.DebugPrint("Too far from totems - UI shown")
