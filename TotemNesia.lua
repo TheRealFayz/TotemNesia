@@ -1943,8 +1943,8 @@ eventFrame:SetScript("OnEvent", function()
                 end
             end
             
-            -- Play audio regardless of UI element visibility
-            if TotemNesiaDB.audioEnabled then
+            -- Play audio only if player can use Totemic Recall
+            if TotemNesiaDB.audioEnabled and TotemNesia.CanUseTotemicRecall() then
                 PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
             end
         else
