@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.7
+-- Version 3.8
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -35,6 +35,9 @@ TotemNesia.activeTotems = {}  -- Track which totems are currently active
 TotemNesia.totemTimestamps = {}  -- Track when each totem was placed
 TotemNesia.totemPositions = {}  -- Track where totems were placed
 TotemNesia.distanceCheckTimer = 0  -- Timer for distance checks
+TotemNesia.weaponEnchantTime = 0  -- Track weapon enchant timestamp
+TotemNesia.weaponEnchantExpiry = nil  -- Track when weapon enchant expires
+TotemNesia.clickedWeaponEnchant = nil  -- Track which weapon enchant was clicked
 
 -- Initialize saved variables
 function TotemNesia.InitDB()
@@ -107,7 +110,8 @@ function TotemNesia.InitDB()
             fire = nil,
             earth = nil,
             water = nil,
-            air = nil
+            air = nil,
+            weapon = nil
         }
     end
     if TotemNesiaDB.totemBarLocked == nil then
@@ -130,6 +134,9 @@ function TotemNesia.InitDB()
     end
     if TotemNesiaDB.totemBarScale == nil then
         TotemNesiaDB.totemBarScale = 1.0
+    end
+    if TotemNesiaDB.hideWeaponSlot == nil then
+        TotemNesiaDB.hideWeaponSlot = false
     end
 end
 
@@ -290,7 +297,7 @@ function TotemNesia.IsAddonEnabled()
     end
 end
 
--- Function to get totem icon texture
+-- Function to get totem/weapon enchant icon texture
 local function GetTotemIcon(totemName)
     local i = 1
     while true do
@@ -482,6 +489,12 @@ TotemNesia.totemLists = {
         "Nature Resistance Totem",
         "Tranquil Air Totem",
         "Windwall Totem"
+    },
+    weapon = {
+        "Rockbiter Weapon",
+        "Flametongue Weapon",
+        "Frostbrand Weapon",
+        "Windfury Weapon"
     }
 }
 
@@ -519,8 +532,8 @@ totemBar:SetScript("OnDragStop", function()
     this:StopMovingOrSizing()
 end)
 
--- Create 4 element slots (Fire, Earth, Water, Air)
-local elementOrder = {"fire", "earth", "water", "air"}
+-- Create 5 element slots (Fire, Earth, Water, Air, Weapon)
+local elementOrder = {"fire", "earth", "water", "air", "weapon"}
 local slotSize = 24
 local slotSpacing = 1
 
@@ -653,8 +666,8 @@ for i, element in ipairs(elementOrder) do
         -- Click handling
         button:RegisterForClicks("LeftButtonUp")
         button:SetScript("OnClick", function()
-            if IsControlKeyDown() then
-                -- Ctrl-click: Set as default totem for this slot
+            if IsControlKeyDown() and this.element ~= "weapon" then
+                -- Ctrl-click: Set as default totem for this slot (not for weapon enchants)
                 local elem = this.element
                 TotemNesiaDB.totemBarSlots[elem] = this.totemName
                 local slotBtn = TotemNesia.totemBarSlots[elem]
@@ -663,14 +676,19 @@ for i, element in ipairs(elementOrder) do
                     slotBtn.iconTexture:SetAlpha(1)
                     slotBtn.selectedTotem = this.totemName
                     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: " .. this.totemName .. " set to " .. elem .. " slot")
-                else
-                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia DEBUG: slotBtn is nil for element: " .. tostring(elem))
                 end
                 flyout.hideTime = nil
                 flyout:Hide()
             else
-                -- Normal click: Cast totem without updating slot
+                -- Normal click: Cast totem/enchant
                 CastSpellByName(this.totemName)
+                
+                -- If this is a weapon enchant, track which one was clicked
+                if this.element == "weapon" then
+                    TotemNesia.clickedWeaponEnchant = this.totemName
+                    TotemNesia.DebugPrint("Weapon enchant clicked: " .. this.totemName)
+                end
+                
                 flyout.hideTime = nil
                 flyout:Hide()
             end
@@ -724,13 +742,15 @@ for i, element in ipairs(elementOrder) do
         end
     end)
     
-    -- Slot click to cast selected totem
-    slot:RegisterForClicks("LeftButtonUp")
-    slot:SetScript("OnClick", function()
-        if this.selectedTotem then
-            CastSpellByName(this.selectedTotem)
-        end
-    end)
+    -- Slot click to cast selected totem (skip for weapon slot - it's display-only)
+    if element ~= "weapon" then
+        slot:RegisterForClicks("LeftButtonUp")
+        slot:SetScript("OnClick", function()
+            if this.selectedTotem then
+                CastSpellByName(this.selectedTotem)
+            end
+        end)
+    end
     
     -- Make slot draggable and propagate to parent totemBar
     slot:RegisterForDrag("LeftButton")
@@ -808,66 +828,127 @@ function TotemNesia.UpdateTotemBar()
     local isVertical = (TotemNesiaDB.totemBarLayout == "Vertical")
     local slotSize = 24
     local slotSpacing = 1
-    local elementOrder = {"fire", "earth", "water", "air"}
+    local elementOrder = {"fire", "earth", "water", "air", "weapon"}
+    
+    -- Count visible slots
+    local visibleSlots = TotemNesiaDB.hideWeaponSlot and 4 or 5
     
     if isVertical then
         -- Vertical layout
         totemBar:SetWidth(slotSize + 8)
-        totemBar:SetHeight((4 * slotSize) + (3 * slotSpacing) + 8)
+        totemBar:SetHeight((visibleSlots * slotSize) + ((visibleSlots - 1) * slotSpacing) + 8)
         
+        local visibleIndex = 0
         for i, element in ipairs(elementOrder) do
             local slot = TotemNesia.totemBarSlots[element]
             if slot then
-                slot:ClearAllPoints()
-                slot:SetPoint("TOP", totemBar, "TOP", 0, -4 - ((i-1) * (slotSize + slotSpacing)))
+                -- Hide weapon slot if setting is enabled
+                if element == "weapon" and TotemNesiaDB.hideWeaponSlot then
+                    slot:Hide()
+                else
+                    slot:Show()
+                    slot:ClearAllPoints()
+                    slot:SetPoint("TOP", totemBar, "TOP", 0, -4 - (visibleIndex * (slotSize + slotSpacing)))
+                    visibleIndex = visibleIndex + 1
+                end
             end
         end
     else
         -- Horizontal layout
-        totemBar:SetWidth((4 * slotSize) + (3 * slotSpacing) + 8)
+        totemBar:SetWidth((visibleSlots * slotSize) + ((visibleSlots - 1) * slotSpacing) + 8)
         totemBar:SetHeight(slotSize + 8)
         
+        local visibleIndex = 0
         for i, element in ipairs(elementOrder) do
             local slot = TotemNesia.totemBarSlots[element]
             if slot then
-                slot:ClearAllPoints()
-                slot:SetPoint("LEFT", totemBar, "LEFT", 4 + ((i-1) * (slotSize + slotSpacing)), 0)
+                -- Hide weapon slot if setting is enabled
+                if element == "weapon" and TotemNesiaDB.hideWeaponSlot then
+                    slot:Hide()
+                else
+                    slot:Show()
+                    slot:ClearAllPoints()
+                    slot:SetPoint("LEFT", totemBar, "LEFT", 4 + (visibleIndex * (slotSize + slotSpacing)), 0)
+                    visibleIndex = visibleIndex + 1
+                end
             end
         end
     end
     
     -- Update each slot
     for element, slot in pairs(TotemNesia.totemBarSlots) do
-        -- Restore saved totem selection
-        local savedTotem = TotemNesiaDB.totemBarSlots[element]
-        if savedTotem and not slot.selectedTotem then
-            slot.selectedTotem = savedTotem
-            slot.iconTexture:SetTexture(GetTotemIcon(savedTotem))
-            slot.iconTexture:SetAlpha(1)
-        end
-        
-        -- Update timer if this totem type is active
-        local hasActiveTotem = false
-        for totemName, _ in pairs(TotemNesia.activeTotems) do
-            if GetTotemElement(totemName) == element then
-                hasActiveTotem = true
-                local timestamp = TotemNesia.totemTimestamps[totemName]
-                if timestamp then
-                    local elapsed = GetTime() - timestamp
-                    local duration = GetTotemDuration(totemName)
-                    local remaining = duration - elapsed
-                    if remaining > 0 then
-                        slot.timerText:SetText(math.ceil(remaining))
-                    else
-                        slot.timerText:SetText("")
-                    end
+        -- Handle weapon slot specially - show active enchant icon
+        if element == "weapon" then
+            -- Show icon for clicked weapon enchant if timer is active
+            if TotemNesia.weaponEnchantTime > 0 and TotemNesia.weaponEnchantExpiry and TotemNesia.clickedWeaponEnchant then
+                local enchantIcon = GetTotemIcon(TotemNesia.clickedWeaponEnchant)
+                if not TotemNesia.lastWeaponIconState or TotemNesia.lastWeaponIconState ~= TotemNesia.clickedWeaponEnchant then
+                    TotemNesia.DebugPrint("Setting weapon icon to: " .. TotemNesia.clickedWeaponEnchant .. " (" .. tostring(enchantIcon) .. ")")
+                    TotemNesia.lastWeaponIconState = TotemNesia.clickedWeaponEnchant
                 end
-                break
+                slot.iconTexture:SetTexture(enchantIcon)
+                slot.iconTexture:SetAlpha(1)
+            else
+                -- No active enchant, clear icon
+                if TotemNesia.lastWeaponIconState then
+                    TotemNesia.DebugPrint("Clearing weapon icon - Time:" .. tostring(TotemNesia.weaponEnchantTime) .. " Expiry:" .. tostring(TotemNesia.weaponEnchantExpiry) .. " Clicked:" .. tostring(TotemNesia.clickedWeaponEnchant))
+                    TotemNesia.lastWeaponIconState = nil
+                end
+                slot.iconTexture:SetTexture(nil)
+                slot.iconTexture:SetAlpha(0)
             end
-        end
-        
-        if not hasActiveTotem then
-            slot.timerText:SetText("")
+            
+            -- Update timer
+            if TotemNesia.weaponEnchantTime > 0 and TotemNesia.weaponEnchantExpiry then
+                local remaining = TotemNesia.weaponEnchantExpiry - GetTime()
+                if remaining > 0 then
+                    if remaining >= 60 then
+                        local mins = math.floor(remaining / 60)
+                        slot.timerText:SetText(mins .. "m")
+                    else
+                        slot.timerText:SetText(math.ceil(remaining))
+                    end
+                else
+                    slot.timerText:SetText("")
+                    TotemNesia.weaponEnchantTime = 0
+                    TotemNesia.weaponEnchantExpiry = nil
+                    TotemNesia.clickedWeaponEnchant = nil
+                end
+            else
+                slot.timerText:SetText("")
+            end
+        else
+            -- Restore saved totem selection for non-weapon slots
+            local savedTotem = TotemNesiaDB.totemBarSlots[element]
+            if savedTotem and not slot.selectedTotem then
+                slot.selectedTotem = savedTotem
+                slot.iconTexture:SetTexture(GetTotemIcon(savedTotem))
+                slot.iconTexture:SetAlpha(1)
+            end
+            
+            -- Update timer if this totem type is active
+            local hasActiveTotem = false
+            for totemName, _ in pairs(TotemNesia.activeTotems) do
+                if GetTotemElement(totemName) == element then
+                    hasActiveTotem = true
+                    local timestamp = TotemNesia.totemTimestamps[totemName]
+                    if timestamp then
+                        local elapsed = GetTime() - timestamp
+                        local duration = GetTotemDuration(totemName)
+                        local remaining = duration - elapsed
+                        if remaining > 0 then
+                            slot.timerText:SetText(math.ceil(remaining))
+                        else
+                            slot.timerText:SetText("")
+                        end
+                    end
+                    break
+                end
+            end
+            
+            if not hasActiveTotem then
+                slot.timerText:SetText("")
+            end
         end
     end
 end
@@ -1096,6 +1177,27 @@ totemUpdateFrame.timeSinceUpdate = 0
 totemUpdateFrame:SetScript("OnUpdate", function()
     this.timeSinceUpdate = this.timeSinceUpdate + arg1
     if this.timeSinceUpdate >= 0.5 then
+        -- Check for weapon enchants
+        local hasMainHandEnchant, mainHandExpiration = GetWeaponEnchantInfo()
+        if hasMainHandEnchant and mainHandExpiration then
+            -- Convert milliseconds to seconds and record when it will expire
+            local expirationSeconds = mainHandExpiration / 1000
+            local currentTime = GetTime()
+            -- If we don't have a start time, or enchant changed, record new start
+            if TotemNesia.weaponEnchantTime == 0 or (TotemNesia.weaponEnchantExpiry and math.abs(TotemNesia.weaponEnchantExpiry - (currentTime + expirationSeconds)) > 5) then
+                TotemNesia.weaponEnchantTime = currentTime
+                TotemNesia.weaponEnchantExpiry = currentTime + expirationSeconds
+                TotemNesia.DebugPrint("Weapon enchant detected, expires in " .. math.floor(expirationSeconds) .. " seconds")
+            end
+        else
+            -- No enchant, clear timer
+            if TotemNesia.weaponEnchantTime > 0 then
+                TotemNesia.DebugPrint("Weapon enchant expired")
+            end
+            TotemNesia.weaponEnchantTime = 0
+            TotemNesia.weaponEnchantExpiry = nil
+        end
+        
         TotemNesia.UpdateTotemTracker()
         TotemNesia.UpdateElementalIndicators()
         TotemNesia.UpdateTotemBar()
@@ -1128,7 +1230,7 @@ minimapBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 -- Create options menu frame
 local optionsMenu = CreateFrame("Frame", "TotemNesiaOptionsMenu", UIParent)
 optionsMenu:SetWidth(400)
-optionsMenu:SetHeight(520)
+optionsMenu:SetHeight(545)
 optionsMenu:SetPoint("CENTER", UIParent, "CENTER")
 optionsMenu:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -1300,14 +1402,27 @@ hideTotemBarCastCheckbox:SetScript("OnClick", function()
     TotemNesia.UpdateTotemBar()
 end)
 
+-- Hide Weapon Enchant Slot checkbox
+local hideWeaponSlotCheckbox = CreateFrame("CheckButton", "TotemNesiaHideWeaponSlotCheckbox", optionsMenu, "UICheckButtonTemplate")
+hideWeaponSlotCheckbox:SetPoint("TOPLEFT", 210, -160)
+hideWeaponSlotCheckbox:SetWidth(24)
+hideWeaponSlotCheckbox:SetHeight(24)
+local hideWeaponSlotLabel = hideWeaponSlotCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+hideWeaponSlotLabel:SetPoint("LEFT", hideWeaponSlotCheckbox, "RIGHT", 5, 0)
+hideWeaponSlotLabel:SetText("Hide Weapon Enchant Slot")
+hideWeaponSlotCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.hideWeaponSlot = this:GetChecked() and true or false
+    TotemNesia.UpdateTotemBar()
+end)
+
 -- LEFT SIDE: "Will be enabled when in:" section
 local enabledWhenLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-enabledWhenLabel:SetPoint("TOPLEFT", 20, -165)
+enabledWhenLabel:SetPoint("TOPLEFT", 20, -190)
 enabledWhenLabel:SetText("Will be enabled when in:")
 
 -- Solo checkbox (vertical stack)
 local soloCheckbox = CreateFrame("CheckButton", "TotemNesiaSoloCheckbox", optionsMenu, "UICheckButtonTemplate")
-soloCheckbox:SetPoint("TOPLEFT", 20, -185)
+soloCheckbox:SetPoint("TOPLEFT", 20, -210)
 soloCheckbox:SetWidth(24)
 soloCheckbox:SetHeight(24)
 local soloLabel = soloCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1319,7 +1434,7 @@ end)
 
 -- Parties checkbox
 local partyCheckbox = CreateFrame("CheckButton", "TotemNesiaPartyCheckbox", optionsMenu, "UICheckButtonTemplate")
-partyCheckbox:SetPoint("TOPLEFT", 20, -210)
+partyCheckbox:SetPoint("TOPLEFT", 20, -235)
 partyCheckbox:SetWidth(24)
 partyCheckbox:SetHeight(24)
 local partyLabel = partyCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1331,7 +1446,7 @@ end)
 
 -- Raids checkbox
 local raidCheckbox = CreateFrame("CheckButton", "TotemNesiaRaidCheckbox", optionsMenu, "UICheckButtonTemplate")
-raidCheckbox:SetPoint("TOPLEFT", 20, -235)
+raidCheckbox:SetPoint("TOPLEFT", 20, -260)
 raidCheckbox:SetWidth(24)
 raidCheckbox:SetHeight(24)
 local raidLabel = raidCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1417,12 +1532,12 @@ end)
 
 -- Timer duration label
 local timerLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-timerLabel:SetPoint("TOP", 0, -260)
+timerLabel:SetPoint("TOP", 0, -285)
 timerLabel:SetText("Display Duration: 15s")
 
 -- Timer duration slider
 local timerSlider = CreateFrame("Slider", "TotemNesiaTimerSlider", optionsMenu)
-timerSlider:SetPoint("TOP", 0, -280)
+timerSlider:SetPoint("TOP", 0, -305)
 timerSlider:SetWidth(350)
 timerSlider:SetHeight(15)
 timerSlider:SetOrientation("HORIZONTAL")
@@ -1455,12 +1570,12 @@ end)
 
 -- Recall Notification Scale label
 local uiScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-uiScaleLabel:SetPoint("TOP", 0, -305)
+uiScaleLabel:SetPoint("TOP", 0, -330)
 uiScaleLabel:SetText("Recall Notification Scale: 1.0")
 
 -- Recall Notification Scale slider
 local uiScaleSlider = CreateFrame("Slider", "TotemNesiaUIScaleSlider", optionsMenu)
-uiScaleSlider:SetPoint("TOP", 0, -325)
+uiScaleSlider:SetPoint("TOP", 0, -350)
 uiScaleSlider:SetWidth(350)
 uiScaleSlider:SetHeight(15)
 uiScaleSlider:SetOrientation("HORIZONTAL")
@@ -1488,12 +1603,12 @@ end)
 
 -- Totem Tracker Scale label
 local trackerScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-trackerScaleLabel:SetPoint("TOP", 0, -350)
+trackerScaleLabel:SetPoint("TOP", 0, -375)
 trackerScaleLabel:SetText("Totem Tracker Scale: 1.0")
 
 -- Totem Tracker Scale slider
 local trackerScaleSlider = CreateFrame("Slider", "TotemNesiaTrackerScaleSlider", optionsMenu)
-trackerScaleSlider:SetPoint("TOP", 0, -370)
+trackerScaleSlider:SetPoint("TOP", 0, -395)
 trackerScaleSlider:SetWidth(350)
 trackerScaleSlider:SetHeight(15)
 trackerScaleSlider:SetOrientation("HORIZONTAL")
@@ -1521,12 +1636,12 @@ end)
 
 -- Totem Bar Scale label
 local barScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-barScaleLabel:SetPoint("TOP", 0, -395)
+barScaleLabel:SetPoint("TOP", 0, -420)
 barScaleLabel:SetText("Totem Bar Scale: 1.0")
 
 -- Totem Bar Scale slider
 local barScaleSlider = CreateFrame("Slider", "TotemNesiaBarScaleSlider", optionsMenu)
-barScaleSlider:SetPoint("TOP", 0, -415)
+barScaleSlider:SetPoint("TOP", 0, -440)
 barScaleSlider:SetWidth(350)
 barScaleSlider:SetHeight(15)
 barScaleSlider:SetOrientation("HORIZONTAL")
@@ -1554,7 +1669,7 @@ end)
 
 -- Keybind macros section
 local keybindTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-keybindTitle:SetPoint("TOP", 0, -445)
+keybindTitle:SetPoint("TOP", 0, -470)
 keybindTitle:SetWidth(360)
 keybindTitle:SetJustifyH("CENTER")
 keybindTitle:SetText("You can create a hotkey to interact with the UI element by copying the macro below:")
@@ -1640,6 +1755,7 @@ minimapButton:SetScript("OnClick", function()
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerHidden)
         lockTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
         hideTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
+        hideWeaponSlotCheckbox:SetChecked(TotemNesiaDB.hideWeaponSlot)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
         soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
         partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
@@ -2041,6 +2157,7 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerHidden)
         lockTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
         hideTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
+        hideWeaponSlotCheckbox:SetChecked(TotemNesiaDB.hideWeaponSlot)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
         soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
         partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
