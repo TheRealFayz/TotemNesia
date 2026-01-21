@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.0
+-- Version 3.8
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -391,14 +391,14 @@ local function GetTotemElement(totemName)
     -- Fire totems
     if string.find(totemName, "Searing") or string.find(totemName, "Fire Nova") or 
        string.find(totemName, "Magma") or string.find(totemName, "Flametongue") or
-       string.find(totemName, "Fire Resistance") or string.find(totemName, "Frost Resistance") then
+       string.find(totemName, "Frost Resistance") then
         return "fire"
     end
     
     -- Water totems
     if string.find(totemName, "Healing Stream") or string.find(totemName, "Mana Spring") or
        string.find(totemName, "Mana Tide") or string.find(totemName, "Disease Cleansing") or
-       string.find(totemName, "Poison Cleansing") then
+       string.find(totemName, "Poison Cleansing") or string.find(totemName, "Fire Resistance") then
         return "water"
     end
     
