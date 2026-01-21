@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.8
+-- Version 3.0
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -1460,7 +1460,7 @@ end)
 local layoutButton = CreateFrame("Button", "TotemNesiaLayoutButton", optionsMenu, "UIPanelButtonTemplate")
 layoutButton:SetWidth(120)
 layoutButton:SetHeight(24)
-layoutButton:SetPoint("TOPRIGHT", -20, -179)
+layoutButton:SetPoint("TOPRIGHT", -20, -205)
 layoutButton:SetText("Horizontal")  -- Default text, will be updated when options open
 
 local layoutLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1471,7 +1471,7 @@ layoutLabel:SetText("Totem Bar Layout:")
 local flyoutButton = CreateFrame("Button", "TotemNesiaFlyoutButton", optionsMenu, "UIPanelButtonTemplate")
 flyoutButton:SetWidth(120)
 flyoutButton:SetHeight(24)
-flyoutButton:SetPoint("TOPRIGHT", -20, -229)
+flyoutButton:SetPoint("TOPRIGHT", -20, -255)
 flyoutButton:SetText("Up")  -- Default text, will be updated when options open
 
 local flyoutLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
