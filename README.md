@@ -7,15 +7,33 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 ## Features
 
 ### Totem Bar (Quick-Cast System)
-- **4-slot quick-cast interface** - Instant access to your most-used totems (Fire, Earth, Water, Air)
-- **Flyout menus** - Icon-only display of all available totems per element
+- **5-slot quick-cast interface** - Instant access to your most-used totems (Fire, Earth, Water, Air) plus weapon enchants
+- **Flyout menus** - Icon-only display of all available totems/enchants per element
 - **Ctrl-click assignment** - Ctrl-click any totem in the flyout to assign it to a slot
 - **Persistent selections** - Your favorite totems are saved between sessions
-- **Duration timers** - Shows countdown for active totems on each slot
+- **Duration timers** - Shows countdown for active totems and weapon enchants on each slot
 - **Flexible layouts** - Horizontal (side-by-side) or Vertical (stacked) orientation
 - **Smart flyout positioning** - Up/Down/Left/Right directions that auto-adjust with layout
 - **Rich tooltips** - Full spell information on mouseover (mana cost, duration, effects)
 - **Independent controls** - Separate lock, hide, and scale settings
+
+### Weapon Enchant Slot (5th Slot)
+- **Automatic icon display** - Shows the icon of your currently active weapon enchant
+- **Flyout menu** - Access all weapon enchants (Rockbiter, Flametongue, Frostbrand, Windfury)
+- **Click-to-cast** - Click enchants in the flyout to apply them
+- **Duration timer** - Countdown showing remaining enchant time
+- **Timer format:**
+  - Above 1 minute: Shows minutes (e.g., "30m", "15m", "1m")
+  - Below 1 minute: Shows seconds only (e.g., "59", "30", "1")
+- **Display-only slot** - Icon updates automatically when you apply an enchant
+- **Hide option** - "Hide Weapon Enchant Slot" checkbox to hide just this slot if desired
+
+### Sequential Totem Casting (v4.0+)
+- **Keybind support** - Set up a keybind in ESC > Key Bindings > TotemNesia
+- **Cycles through totems** - Press once to cast Fire, press again for Earth, then Water, then Air
+- **Auto-reset** - Resets to Fire totem after 5 seconds of inactivity
+- **Uses assigned totems** - Casts whichever totems you've assigned to your Totem Bar slots
+- **One spell per keypress** - Respects Vanilla WoW API limitations
 
 ### Distance Tracking
 - **Automatic alerts** - UI pops up when you move more than 30 yards from your totems
@@ -55,14 +73,25 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 3. Restart WoW or type `/reload` in-game
 4. The addon will automatically load when you log in with a Shaman character
 
+**Note for v4.0+:** The addon now includes a `Bindings.xml` file for keybind support. Make sure all files are extracted.
+
 ## How It Works
 
 ### Totem Bar Quick-Cast
-1. Mouse over any slot (Fire, Earth, Water, or Air) to see the flyout menu
-2. **Ctrl-click** a totem in the flyout to assign it to that slot
+1. Mouse over any slot (Fire, Earth, Water, Air, or Weapon) to see the flyout menu
+2. **Ctrl-click** a totem in the flyout to assign it to that slot (totems only, not weapon enchants)
 3. **Click** the assigned slot anytime to instantly cast that totem
-4. Duration timer appears on the slot when that totem is active
-5. Your selections are saved and persist between sessions
+4. **Weapon slot** - Click enchants in the flyout to apply them; icon appears automatically
+5. Duration timer appears on the slot when that totem/enchant is active
+6. Your totem selections are saved and persist between sessions
+
+### Sequential Totem Casting (v4.0+)
+1. Go to ESC > Key Bindings > scroll to "TotemNesia"
+2. Bind "Sequential Totem Cast" to your preferred key
+3. Press the key once to cast your Fire totem
+4. Press again to cast Earth, then Water, then Air
+5. If you wait more than 5 seconds, it resets to Fire
+6. Only works with totems you've assigned to Totem Bar slots
 
 ### Distance Monitoring
 1. Totems are tracked when you cast them
@@ -96,6 +125,7 @@ Access all settings by clicking the minimap button, or typing `/tn`:
 - **Enable Totem Bar** - Toggle the quick-cast bar on/off
 - **Lock Totem Bar** - Lock/unlock the totem bar for positioning
 - **Hide Totem Bar** - Hide the quick-cast bar if not needed
+- **Hide Weapon Enchant Slot** - Hide just the weapon enchant slot if you don't want it
 - **Debug mode** - Enable detailed logging for troubleshooting
 
 ### Will be enabled when in
@@ -118,11 +148,9 @@ Access all settings by clicking the minimap button, or typing `/tn`:
 - **Totem Bar Scale** - Resize the quick-cast bar (0.5x to 2.0x)
 - All changes preview in real-time
 
-### Keybind Macro
-- Click the macro text at the bottom of the options menu to select it
-- Press Ctrl+C to copy
-- Create a WoW macro with this command and bind it to a key
-- Allows you to recall totems with a hotkey instead of clicking the UI
+### Keybinds
+- **Sequential Totem Cast** (v4.0+) - Available in ESC > Key Bindings > TotemNesia
+- **Totemic Recall Macro** - Copy the macro from settings menu to create a hotkey for recalling totems
 
 ## Usage Tips
 
@@ -145,6 +173,21 @@ Access all settings by clicking the minimap button, or typing `/tn`:
 4. **Ctrl-click** your most-used totems to assign them to slots
 5. Click the slots anytime to instantly cast those totems
 6. Your selections are automatically saved
+
+### Using the Weapon Enchant Slot
+1. Mouse over the 5th slot (weapon slot) to see the flyout
+2. Click any enchant to apply it (Rockbiter, Flametongue, Frostbrand, Windfury)
+3. The icon automatically appears showing your active enchant
+4. Timer counts down: "30m" → "1m" → "59" → "1"
+5. Icon clears when enchant expires
+6. **Note:** Icon won't show on login/reload for existing enchants (API limitation)
+
+### Using Sequential Totem Casting (v4.0+)
+1. Assign your preferred totems to Totem Bar slots (Ctrl-click in flyouts)
+2. Go to ESC > Key Bindings > TotemNesia section
+3. Bind "Sequential Totem Cast" to a key
+4. Press key 4 times to drop all 4 totems (Fire → Earth → Water → Air)
+5. If interrupted, wait 5+ seconds and it resets to Fire
 
 ### Understanding the Totem Tracker
 - **Automatic**: Shows icons of currently active totems only
@@ -176,6 +219,8 @@ Enable debug mode in the options menu to see detailed information about:
 - Totem recall events
 - Element categorization
 - Distance warnings
+- Weapon enchant detection and timing
+- Sequential totem casting (v4.0+)
 
 This is useful for troubleshooting or understanding how the addon tracks your totems.
 
@@ -187,6 +232,12 @@ Vanilla WoW (1.12) has API restrictions that prevent addons from automatically c
 - Providing a clickable UI element that counts as player-initiated input
 - Allowing you to recall totems with a single click instead of manually casting
 - Helping keep Shamans from forgetting their totems and causing accidental pulls
+
+### Weapon Enchant Detection
+The weapon enchant system uses `GetWeaponEnchantInfo()` API to detect active enchants and their expiration times. Because weapon enchants don't show as scannable buffs in Vanilla WoW, the addon tracks which enchant you clicked in the flyout menu and displays that icon while the timer is active. If you reload or login with an existing enchant, the timer will work but the icon won't appear until you apply a fresh enchant from the flyout.
+
+### Sequential Totem Casting (v4.0+)
+The sequential casting feature respects Vanilla WoW's "one spell per keypress" limitation. Each keypress casts one totem in order (Fire → Earth → Water → Air). The addon tracks which totem is next and automatically resets to Fire after 5 seconds of inactivity. This feature requires the `Bindings.xml` file to be present for keybind registration.
 
 ### Totem Detection Method
 The addon tracks totems through multiple combat log events:
@@ -230,6 +281,28 @@ All UI elements can be positioned independently:
 - Verify the addon is enabled for your current group type (Solo/Parties/Raids)
 - Check if distance tracking triggered it earlier (it may have already shown)
 
+**The weapon enchant icon doesn't show**
+- Apply a weapon enchant from the flyout menu (icon only appears after using the flyout)
+- Check that "Hide Weapon Enchant Slot" is not enabled
+- Enable debug mode to see weapon enchant detection messages
+- Note: Icon won't show on login/reload for existing enchants (API limitation)
+
+**The weapon enchant timer is wrong**
+- Timer uses the game's API and should be accurate
+- Enable debug mode to see "Weapon enchant detected, expires in X seconds"
+- Try `/reload` if the timer seems stuck
+
+**Sequential totem casting doesn't work (v4.0+)**
+- Make sure you have totems assigned to Totem Bar slots (Ctrl-click in flyouts)
+- Check ESC > Key Bindings > TotemNesia to verify keybind is set
+- Enable debug mode to see "Sequential cast: [element] - [totem name]"
+- If it says "No totem assigned", you need to assign totems to slots first
+
+**Sequential cast keeps resetting to Fire**
+- This is normal if you wait more than 5 seconds between presses
+- The auto-reset prevents confusion when you come back later
+- Press the key 4 times quickly to drop all totems
+
 **The totem tracker isn't showing my totems**
 - Make sure "Hide Totem Tracker" is unchecked in options
 - Enable debug mode to see what totems are being tracked
@@ -247,6 +320,7 @@ All UI elements can be positioned independently:
 
 **Ctrl-click doesn't assign totems**
 - Make sure you're holding Ctrl while clicking
+- Ctrl-click does NOT work for weapon enchants (they're click-to-cast only)
 - Enable debug mode to see if assignment is being detected
 - Try `/reload` and reassign
 
