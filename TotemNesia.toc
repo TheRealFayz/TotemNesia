@@ -2,7 +2,8 @@
 ## Title: TotemNesia
 ## Notes: Reminds Shamans to pick up their totems after combat with a clickable notification
 ## Author: Fayz - Nordanaar
-## Version: 3.8
+## Version: 4.0
 ## SavedVariables: TotemNesiaDB
 
 TotemNesia.lua
+Bindings.xml
