@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 3.8
+-- Version 4.0
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -38,6 +38,8 @@ TotemNesia.distanceCheckTimer = 0  -- Timer for distance checks
 TotemNesia.weaponEnchantTime = 0  -- Track weapon enchant timestamp
 TotemNesia.weaponEnchantExpiry = nil  -- Track when weapon enchant expires
 TotemNesia.clickedWeaponEnchant = nil  -- Track which weapon enchant was clicked
+TotemNesia.sequentialCastIndex = 1  -- Track position in sequential totem casting (1=fire, 2=earth, 3=water, 4=air)
+TotemNesia.sequentialCastLastTime = 0  -- Track last cast time for timeout reset
 
 -- Initialize saved variables
 function TotemNesia.InitDB()
@@ -1672,11 +1674,11 @@ local keybindTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNorma
 keybindTitle:SetPoint("TOP", 0, -470)
 keybindTitle:SetWidth(360)
 keybindTitle:SetJustifyH("CENTER")
-keybindTitle:SetText("You can create a hotkey to interact with the UI element by copying the macro below:")
+keybindTitle:SetText("Keybinds: Sequential Totem Cast keybind available in ESC > Key Bindings > TotemNesia")
 
 -- Recall macro EditBox
 local keybind1 = CreateFrame("EditBox", nil, optionsMenu)
-keybind1:SetPoint("TOPLEFT", 20, -465)
+keybind1:SetPoint("TOPLEFT", 20, -490)
 keybind1:SetWidth(360)
 keybind1:SetHeight(20)
 keybind1:SetFontObject(GameFontNormalSmall)
@@ -1982,6 +1984,39 @@ function TotemNesia.ResetPosition()
     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame position reset to center.")
 end
 
+-- Sequential totem casting function (cycles through Fire -> Earth -> Water -> Air)
+function TotemNesia.CastNextTotem()
+    -- Check for timeout (5 seconds of inactivity resets to fire)
+    local currentTime = GetTime()
+    if currentTime - TotemNesia.sequentialCastLastTime > 5 then
+        TotemNesia.sequentialCastIndex = 1
+        TotemNesia.DebugPrint("Sequential cast timeout - reset to Fire")
+    end
+    
+    -- Element order: fire, earth, water, air
+    local elementOrder = {"fire", "earth", "water", "air"}
+    local element = elementOrder[TotemNesia.sequentialCastIndex]
+    
+    -- Get the selected totem for this element from the totem bar
+    local slot = TotemNesia.totemBarSlots[element]
+    if slot and slot.selectedTotem then
+        local totemName = slot.selectedTotem
+        TotemNesia.DebugPrint("Sequential cast: " .. element .. " - " .. totemName)
+        CastSpellByName(totemName)
+    else
+        TotemNesia.DebugPrint("Sequential cast: No totem assigned to " .. element .. " slot")
+    end
+    
+    -- Advance to next element (with wraparound)
+    TotemNesia.sequentialCastIndex = TotemNesia.sequentialCastIndex + 1
+    if TotemNesia.sequentialCastIndex > 4 then
+        TotemNesia.sequentialCastIndex = 1
+    end
+    
+    -- Update last cast time
+    TotemNesia.sequentialCastLastTime = currentTime
+end
+
 -- Event frame
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -2199,4 +2234,13 @@ function TotemNesia_RecallTotems()
     else
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: No totems to recall")
     end
+end
+
+-- Helper function for sequential totem casting keybind
+function TotemNesia_CastNextTotem()
+    if not IsShaman() then
+        return
+    end
+    
+    TotemNesia.CastNextTotem()
 end
