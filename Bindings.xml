@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="TOTEM_SEQUENTIAL_CAST" header="TOTEM_NESIA">
+		TotemNesia_CastNextTotem()
+	</Binding>
+</Bindings>
