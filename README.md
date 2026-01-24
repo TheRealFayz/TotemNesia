@@ -14,7 +14,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Flexible layouts** - Horizontal or Vertical orientation with smart flyout positioning
 - **Independent controls** - Separate lock, hide, and scale settings
 
-![Totem Bar](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png)
+<img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totem%20Bar.png?raw=true">
 
 ### Weapon Enchant Slot (5th Slot)
 - **Automatic icon display** - Shows your currently active weapon enchant
@@ -23,12 +23,16 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Duration timer** - Countdown in minutes (30m, 1m) or seconds (59, 30, 1) when under 1 minute
 - **Hide option** - Optional checkbox to hide this slot if not needed
 
-### Sequential Totem Casting (v4.0+)
+### Totem Casting (v4.0+)
 - **Keybind support** - Set up a keybind in ESC > Key Bindings > TotemNesia
-- **Cycles through totems** - Press once to cast Fire, press again for Earth, then Water, then Air
-- **Auto-reset** - Resets to Fire totem after 5 seconds of inactivity
+- **Nampower detection** - Automatically detects nampower client mod for instant 4-totem casting
+- **Adaptive casting modes:**
+  * **With nampower**: Press keybind once to instantly cast all 4 totems (Fire, Earth, Water, Air)
+  * **Without nampower**: Spam keybind to cycle through totems sequentially (one per keypress)
+- **Auto-reset** - Resets to Fire totem after 5 seconds of inactivity (non-nampower mode)
 - **Uses assigned totems** - Casts whichever totems you've assigned to your Totem Bar slots
-- **One spell per keypress** - Respects Vanilla WoW API limitations
+
+<img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/1%20button%20totems.gif?raw=true">
 
 ### Totem Sets (v3.4+)
 - **5 configurable sets** - Create up to 5 different totem combinations for various situations
@@ -64,7 +68,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Audio notification** - Optional sound alert when notification appears
 - **Scalable** - Adjust size from 50% to 200%
 
-![Totem Tracker and Recall Interface](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png)
+<img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png?raw=true">
 
 ### Smart Detection
 - **Combat log tracking** - Monitors individual totem summons and expirations
