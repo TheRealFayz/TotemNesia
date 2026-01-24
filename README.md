@@ -13,6 +13,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Duration timers** - Shows countdown for active totems and weapon enchants
 - **Flexible layouts** - Horizontal or Vertical orientation with smart flyout positioning
 - **Independent controls** - Separate lock, hide, and scale settings
+<img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totem%20Bar%20Closed.png?raw=true">
 
 <img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totem%20Bar.png?raw=true">
 
