@@ -51,6 +51,7 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Flexible layouts** - Horizontal or Vertical orientation with 20x20 pixel icons
 - **Elemental indicators** - 16x16 pixel indicators positioned to match in-game totem layout
 - **Fully customizable** - Drag to position, lock in place, hide completely, or scale from 50% to 200%
+
 ![Totem Tracker and Recall Interface](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png)
 
 ### Totemic Recall Notification
