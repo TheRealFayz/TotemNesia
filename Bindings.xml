@@ -1,5 +1,17 @@
 <Bindings>
-	<Binding name="TOTEM_SEQUENTIAL_CAST" header="TOTEM_NESIA">
-		TotemNesia_CastNextTotem()
+	<Binding name="Totem Set 1" header="TOTEM_NESIA">
+		TotemNesia_CastNextTotem(1)
+	</Binding>
+	<Binding name="Totem Set 2">
+		TotemNesia_CastNextTotem(2)
+	</Binding>
+	<Binding name="Totem Set 3">
+		TotemNesia_CastNextTotem(3)
+	</Binding>
+	<Binding name="Totem Set 4">
+		TotemNesia_CastNextTotem(4)
+	</Binding>
+	<Binding name="Totem Set 5">
+		TotemNesia_CastNextTotem(5)
 	</Binding>
 </Bindings>
