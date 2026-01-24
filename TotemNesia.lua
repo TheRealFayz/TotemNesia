@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 4.0
+-- Version 4.1
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -15,6 +15,20 @@ end
 
 -- Shaman detected, proceed with loading
 DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Shaman detected, addon enabled.")
+
+-- ============================================================================
+-- KEYBIND STRINGS
+-- ============================================================================
+
+-- Header for keybindings menu
+BINDING_HEADER_TOTEM_NESIA = "TotemNesia"
+
+-- Individual keybind descriptions
+BINDING_NAME_TOTEM_SET_1 = "Totem Set 1"
+BINDING_NAME_TOTEM_SET_2 = "Totem Set 2"
+BINDING_NAME_TOTEM_SET_3 = "Totem Set 3"
+BINDING_NAME_TOTEM_SET_4 = "Totem Set 4"
+BINDING_NAME_TOTEM_SET_5 = "Totem Set 5"
 
 -- ============================================================================
 -- CONSTANTS
@@ -40,6 +54,43 @@ TotemNesia.weaponEnchantExpiry = nil  -- Track when weapon enchant expires
 TotemNesia.clickedWeaponEnchant = nil  -- Track which weapon enchant was clicked
 TotemNesia.sequentialCastIndex = 1  -- Track position in sequential totem casting (1=fire, 2=earth, 3=water, 4=air)
 TotemNesia.sequentialCastLastTime = 0  -- Track last cast time for timeout reset
+TotemNesia.hasNampower = false  -- Whether nampower client mod is detected
+TotemNesia.nampowerVersion = nil  -- Nampower version if detected
+
+-- Check for nampower client mod
+function TotemNesia.DetectNampower()
+    if GetNampowerVersion then
+        local major, minor, patch = GetNampowerVersion()
+        if major then
+            TotemNesia.hasNampower = true
+            TotemNesia.nampowerVersion = string.format("%d.%d.%d", major, minor, patch)
+            TotemNesia.DebugPrint("Nampower " .. TotemNesia.nampowerVersion .. " detected - instant multi-totem casting enabled!")
+            return true
+        end
+    end
+    TotemNesia.hasNampower = false
+    return false
+end
+
+-- Track all totem icon textures for refreshing after spellbook loads
+TotemNesia.totemIcons = {}
+
+-- Refresh all totem icons after spellbook is loaded
+function TotemNesia.RefreshTotemSetIcons()
+    if not TotemNesia.totemIcons then
+        return
+    end
+    
+    local refreshCount = 0
+    for _, iconData in ipairs(TotemNesia.totemIcons) do
+        if iconData and iconData.iconTexture and iconData.totemName then
+            local texture = GetTotemIcon(iconData.totemName)
+            iconData.iconTexture:SetTexture(texture)
+            refreshCount = refreshCount + 1
+        end
+    end
+    TotemNesia.DebugPrint("Refreshed " .. refreshCount .. " totem icons")
+end
 
 -- Initialize saved variables
 function TotemNesia.InitDB()
@@ -139,6 +190,20 @@ function TotemNesia.InitDB()
     end
     if TotemNesiaDB.hideWeaponSlot == nil then
         TotemNesiaDB.hideWeaponSlot = false
+    end
+    
+    -- Initialize totem sets (5 sets)
+    if TotemNesiaDB.totemSets == nil then
+        TotemNesiaDB.totemSets = {
+            [1] = {fire = nil, earth = nil, water = nil, air = nil},
+            [2] = {fire = nil, earth = nil, water = nil, air = nil},
+            [3] = {fire = nil, earth = nil, water = nil, air = nil},
+            [4] = {fire = nil, earth = nil, water = nil, air = nil},
+            [5] = {fire = nil, earth = nil, water = nil, air = nil}
+        }
+    end
+    if TotemNesiaDB.currentTotemSet == nil then
+        TotemNesiaDB.currentTotemSet = 1
     end
 end
 
@@ -300,7 +365,7 @@ function TotemNesia.IsAddonEnabled()
 end
 
 -- Function to get totem/weapon enchant icon texture
-local function GetTotemIcon(totemName)
+function GetTotemIcon(totemName)
     local i = 1
     while true do
         local spellName = GetSpellName(i, BOOKTYPE_SPELL)
@@ -334,7 +399,7 @@ local totemDurations = {
     -- Water Totems
     ["Poison Cleansing Totem"] = 120,
     ["Disease Cleansing Totem"] = 120,
-    ["Fire Resistance Totem"] = 120,
+    ["Frost Resistance Totem"] = 120,
     ["Mana Spring Totem"] = 60,
     ["Healing Stream Totem"] = 60,
     
@@ -479,7 +544,7 @@ TotemNesia.totemLists = {
     water = {
         "Healing Stream Totem",
         "Mana Spring Totem",
-        "Fire Resistance Totem",
+        "Frost Resistance Totem",
         "Disease Cleansing Totem",
         "Poison Cleansing Totem"
         -- Mana Tide Totem removed (doesn't exist on Turtle WoW)
@@ -677,7 +742,7 @@ for i, element in ipairs(elementOrder) do
                     slotBtn.iconTexture:SetTexture(GetTotemIcon(this.totemName))
                     slotBtn.iconTexture:SetAlpha(1)
                     slotBtn.selectedTotem = this.totemName
-                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: " .. this.totemName .. " set to " .. elem .. " slot")
+                    TotemNesia.DebugPrint(this.totemName .. " set to " .. elem .. " slot")
                 end
                 flyout.hideTime = nil
                 flyout:Hide()
@@ -962,7 +1027,7 @@ function TotemNesia.UpdateTotemBarFlyouts()
     local iconSpacing = 2
     
     if TotemNesiaDB.debugMode then
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: UpdateTotemBarFlyouts called, direction = " .. tostring(direction))
+        TotemNesia.DebugPrint("UpdateTotemBarFlyouts called, direction = " .. tostring(direction))
     end
     
     for element, slot in pairs(TotemNesia.totemBarSlots) do
@@ -1281,9 +1346,721 @@ closeButton:SetScript("OnClick", function()
     optionsMenu:Hide()
 end)
 
--- LEFT COLUMN
+-- Content frames
+local settingsContent = CreateFrame("Frame", nil, optionsMenu)
+settingsContent:SetAllPoints(optionsMenu)
+settingsContent:Show()
+
+local totemSetsContent = CreateFrame("Frame", nil, optionsMenu)
+totemSetsContent:SetAllPoints(optionsMenu)
+totemSetsContent:Hide()
+
+-- Create fireButtons table BEFORE tabs (so it exists when tabs reference it)
+local fireButtons = {}
+local earthButtons = {}
+local waterButtons = {}
+local airButtons = {}
+
+-- Define UpdateFireBorders BEFORE tabs (so they can call it)
+local function UpdateFireBorders()
+    if not TotemNesiaDB or not TotemNesiaDB.currentTotemSet or not TotemNesiaDB.totemSets then
+        return
+    end
+    local currentSet = TotemNesiaDB.currentTotemSet
+    if not TotemNesiaDB.totemSets[currentSet] then
+        return
+    end
+    local selectedTotem = TotemNesiaDB.totemSets[currentSet].fire
+    for _, btn in ipairs(fireButtons) do
+        if btn.totemName == selectedTotem then
+            btn.borderOverlay:SetBackdrop({
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                tile = false, tileSize = 1, edgeSize = 2,
+                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+            })
+            btn.borderOverlay:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            btn.borderOverlay:SetBackdrop(nil)
+        end
+    end
+end
+
+-- Update Earth borders function
+local function UpdateEarthBorders()
+    if not TotemNesiaDB or not TotemNesiaDB.currentTotemSet or not TotemNesiaDB.totemSets then
+        return
+    end
+    local currentSet = TotemNesiaDB.currentTotemSet
+    local selectedTotem = TotemNesiaDB.totemSets[currentSet].earth
+    for _, btn in ipairs(earthButtons) do
+        if btn.totemName == selectedTotem then
+            btn.borderOverlay:SetBackdrop({
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                tile = false, tileSize = 1, edgeSize = 2,
+                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+            })
+            btn.borderOverlay:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            btn.borderOverlay:SetBackdrop(nil)
+        end
+    end
+end
+
+-- Update Water borders function
+local function UpdateWaterBorders()
+    if not TotemNesiaDB or not TotemNesiaDB.currentTotemSet or not TotemNesiaDB.totemSets then
+        return
+    end
+    local currentSet = TotemNesiaDB.currentTotemSet
+    local selectedTotem = TotemNesiaDB.totemSets[currentSet].water
+    for _, btn in ipairs(waterButtons) do
+        if btn.totemName == selectedTotem then
+            btn.borderOverlay:SetBackdrop({
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                tile = false, tileSize = 1, edgeSize = 2,
+                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+            })
+            btn.borderOverlay:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            btn.borderOverlay:SetBackdrop(nil)
+        end
+    end
+end
+
+-- Update Air borders function
+local function UpdateAirBorders()
+    if not TotemNesiaDB or not TotemNesiaDB.currentTotemSet or not TotemNesiaDB.totemSets then
+        return
+    end
+    local currentSet = TotemNesiaDB.currentTotemSet
+    local selectedTotem = TotemNesiaDB.totemSets[currentSet].air
+    for _, btn in ipairs(airButtons) do
+        if btn.totemName == selectedTotem then
+            btn.borderOverlay:SetBackdrop({
+                edgeFile = "Interface\\Buttons\\WHITE8X8",
+                tile = false, tileSize = 1, edgeSize = 2,
+                insets = { left = 0, right = 0, top = 0, bottom = 0 }
+            })
+            btn.borderOverlay:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            btn.borderOverlay:SetBackdrop(nil)
+        end
+    end
+end
+
+-- Simple tab buttons
+local settingsTab = CreateFrame("Button", nil, optionsMenu)
+settingsTab:SetWidth(100)
+settingsTab:SetHeight(32)
+settingsTab:SetPoint("TOPLEFT", optionsMenu, "BOTTOMLEFT", 10, 7)
+settingsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+settingsTab:SetHighlightTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+
+local settingsTabText = settingsTab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+settingsTabText:SetPoint("CENTER", 0, 2)
+settingsTabText:SetText("Settings")
+
+local totemSetsTab = CreateFrame("Button", nil, optionsMenu)
+totemSetsTab:SetWidth(100)
+totemSetsTab:SetHeight(32)
+totemSetsTab:SetPoint("LEFT", settingsTab, "RIGHT", -15, 0)
+totemSetsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+totemSetsTab:SetHighlightTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+
+local totemSetsTabText = totemSetsTab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+totemSetsTabText:SetPoint("CENTER", 0, 2)
+totemSetsTabText:SetText("Totem Sets")
+
+-- Tab click handlers
+settingsTab:SetScript("OnClick", function()
+    settingsContent:Show()
+    totemSetsContent:Hide()
+    settingsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+    totemSetsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+end)
+
+totemSetsTab:SetScript("OnClick", function()
+    settingsContent:Hide()
+    totemSetsContent:Show()
+    settingsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+    totemSetsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+    -- Update all borders when tab is opened
+    UpdateFireBorders()
+    UpdateEarthBorders()
+    UpdateWaterBorders()
+    UpdateAirBorders()
+end)
+
+-- TOTEM SETS TAB - Step 1: Instructions and Set Selector
+local setsInstructions = totemSetsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+setsInstructions:SetPoint("TOP", 0, -60)
+setsInstructions:SetWidth(380)
+setsInstructions:SetJustifyH("CENTER")
+setsInstructions:SetText("Click a set, then click totems to assign them.\nKeybinds: ESC > Key Bindings > TotemNesia (5 keybinds)")
+
+-- Set selector label
+local setLabel = totemSetsContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+setLabel:SetPoint("TOP", 0, -110)
+setLabel:SetText("Totem Set:")
+
+-- Set selector buttons (1-5)
+local setButtons = {}
+for i = 1, 5 do
+    local btn = CreateFrame("Button", nil, totemSetsContent, "UIPanelButtonTemplate")
+    btn:SetWidth(40)
+    btn:SetHeight(28)
+    btn:SetPoint("TOP", -110 + (i-1) * 55, -140)
+    btn:SetText(tostring(i))
+    btn.setNumber = i
+    btn:SetScript("OnClick", function()
+        TotemNesiaDB.currentTotemSet = this.setNumber
+        -- Highlight buttons
+        for j = 1, 5 do
+            if j == this.setNumber then
+                setButtons[j]:LockHighlight()
+            else
+                setButtons[j]:UnlockHighlight()
+            end
+        end
+        TotemNesia.DebugPrint("Selected Set " .. this.setNumber)
+        -- Update all totem family borders
+        UpdateFireBorders()
+        UpdateEarthBorders()
+        UpdateWaterBorders()
+        UpdateAirBorders()
+    end)
+    setButtons[i] = btn
+end
+
+-- Highlight the currently selected set from database
+if TotemNesiaDB and TotemNesiaDB.currentTotemSet then
+    setButtons[TotemNesiaDB.currentTotemSet]:LockHighlight()
+else
+    setButtons[1]:LockHighlight()
+end
+
+-- Fire totem buttons (testBtn, testBtn2-5)
+local fireLabel = totemSetsContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+fireLabel:SetPoint("TOPLEFT", 20, -190)
+fireLabel:SetText("Fire:")
+
+-- Fire 1: Searing Totem
+local testBtn = CreateFrame("Button", nil, totemSetsContent)
+testBtn:SetWidth(28)
+testBtn:SetHeight(28)
+testBtn:SetPoint("TOPLEFT", 80, -190)
+
+testBtn:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false,
+    tileSize = 1,
+    edgeSize = 2,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+})
+testBtn:SetBackdropColor(1, 0.3, 0.3, 0.6)
+testBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+-- Add Searing Totem icon
+local icon = testBtn:CreateTexture(nil, "ARTWORK")
+icon:SetAllPoints(testBtn)
+icon:SetTexture(GetTotemIcon("Searing Totem"))
+icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = icon, totemName = "Searing Totem"})
+
+-- Create border overlay frame on top of icon
+local borderOverlay = CreateFrame("Frame", nil, testBtn)
+borderOverlay:SetAllPoints(testBtn)
+borderOverlay:SetFrameLevel(testBtn:GetFrameLevel() + 1)
+testBtn.borderOverlay = borderOverlay
+
+testBtn.totemName = "Searing Totem"
+table.insert(fireButtons, testBtn)
+
+testBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    -- Find spell in spellbook and show its tooltip
+    for i = 1, 200 do
+        local spellName = GetSpellName(i, BOOKTYPE_SPELL)
+        if spellName == this.totemName then
+            GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+            GameTooltip:Show()
+            return
+        end
+    end
+    -- Fallback if spell not found
+    GameTooltip:SetText(this.totemName)
+    GameTooltip:Show()
+end)
+testBtn:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+
+testBtn:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].fire = this.totemName
+    TotemNesia.DebugPrint("Set " .. set .. " Fire = " .. this.totemName)
+    UpdateFireBorders()
+end)
+
+-- Add second button: Fire Nova Totem
+local testBtn2 = CreateFrame("Button", nil, totemSetsContent)
+testBtn2:SetWidth(28)
+testBtn2:SetHeight(28)
+testBtn2:SetPoint("TOPLEFT", 112, -190)  -- 32 pixels to the right
+
+testBtn2:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false,
+    tileSize = 1,
+    edgeSize = 2,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+})
+testBtn2:SetBackdropColor(1, 0.3, 0.3, 0.6)
+testBtn2:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+
+local icon2 = testBtn2:CreateTexture(nil, "ARTWORK")
+icon2:SetAllPoints(testBtn2)
+icon2:SetTexture(GetTotemIcon("Fire Nova Totem"))
+icon2:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = icon2, totemName = "Fire Nova Totem"})
+
+-- Create border overlay frame on top of icon
+local borderOverlay2 = CreateFrame("Frame", nil, testBtn2)
+borderOverlay2:SetAllPoints(testBtn2)
+borderOverlay2:SetFrameLevel(testBtn2:GetFrameLevel() + 1)
+testBtn2.borderOverlay = borderOverlay2
+
+testBtn2.totemName = "Fire Nova Totem"
+
+table.insert(fireButtons, testBtn2)
+testBtn2:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    for i = 1, 200 do
+        local spellName = GetSpellName(i, BOOKTYPE_SPELL)
+        if spellName == this.totemName then
+            GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+            GameTooltip:Show()
+            return
+        end
+    end
+    GameTooltip:SetText(this.totemName)
+    GameTooltip:Show()
+end)
+testBtn2:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+
+testBtn2:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].fire = this.totemName
+    TotemNesia.DebugPrint("Set " .. set .. " Fire = " .. this.totemName)
+    UpdateFireBorders()
+    UpdateFireBorders()
+end)
+
+-- Add third button: Magma Totem
+local testBtn3 = CreateFrame("Button", nil, totemSetsContent)
+testBtn3:SetWidth(28)
+testBtn3:SetHeight(28)
+testBtn3:SetPoint("TOPLEFT", 144, -190)
+testBtn3:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false, tileSize = 1, edgeSize = 2,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+})
+testBtn3:SetBackdropColor(1, 0.3, 0.3, 0.6)
+testBtn3:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+local icon3 = testBtn3:CreateTexture(nil, "ARTWORK")
+icon3:SetAllPoints(testBtn3)
+icon3:SetTexture(GetTotemIcon("Magma Totem"))
+icon3:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = icon3, totemName = "Magma Totem"})
+
+-- Create border overlay frame on top of icon
+local borderOverlay3 = CreateFrame("Frame", nil, testBtn3)
+borderOverlay3:SetAllPoints(testBtn3)
+borderOverlay3:SetFrameLevel(testBtn3:GetFrameLevel() + 1)
+testBtn3.borderOverlay = borderOverlay3
+
+testBtn3.totemName = "Magma Totem"
+table.insert(fireButtons, testBtn3)
+testBtn3:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    for i = 1, 200 do
+        if GetSpellName(i, BOOKTYPE_SPELL) == this.totemName then
+            GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+            GameTooltip:Show()
+            return
+        end
+    end
+    GameTooltip:SetText(this.totemName)
+    GameTooltip:Show()
+end)
+testBtn3:SetScript("OnLeave", function() GameTooltip:Hide() end)
+testBtn3:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].fire = this.totemName
+    TotemNesia.DebugPrint("Set " .. set .. " Fire = " .. this.totemName)
+    UpdateFireBorders()
+    UpdateFireBorders()
+end)
+
+-- Add fourth button: Flametongue Totem
+local testBtn4 = CreateFrame("Button", nil, totemSetsContent)
+testBtn4:SetWidth(28)
+testBtn4:SetHeight(28)
+testBtn4:SetPoint("TOPLEFT", 176, -190)
+testBtn4:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false, tileSize = 1, edgeSize = 2,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+})
+testBtn4:SetBackdropColor(1, 0.3, 0.3, 0.6)
+testBtn4:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+local icon4 = testBtn4:CreateTexture(nil, "ARTWORK")
+icon4:SetAllPoints(testBtn4)
+icon4:SetTexture(GetTotemIcon("Flametongue Totem"))
+icon4:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = icon4, totemName = "Flametongue Totem"})
+
+-- Create border overlay frame on top of icon
+local borderOverlay4 = CreateFrame("Frame", nil, testBtn4)
+borderOverlay4:SetAllPoints(testBtn4)
+borderOverlay4:SetFrameLevel(testBtn4:GetFrameLevel() + 1)
+testBtn4.borderOverlay = borderOverlay4
+
+testBtn4.totemName = "Flametongue Totem"
+table.insert(fireButtons, testBtn4)
+testBtn4:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    for i = 1, 200 do
+        if GetSpellName(i, BOOKTYPE_SPELL) == this.totemName then
+            GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+            GameTooltip:Show()
+            return
+        end
+    end
+    GameTooltip:SetText(this.totemName)
+    GameTooltip:Show()
+end)
+testBtn4:SetScript("OnLeave", function() GameTooltip:Hide() end)
+testBtn4:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].fire = this.totemName
+    TotemNesia.DebugPrint("Set " .. set .. " Fire = " .. this.totemName)
+    UpdateFireBorders()
+    UpdateFireBorders()
+end)
+
+-- Add fifth button: Frost Resistance Totem
+local testBtn5 = CreateFrame("Button", nil, totemSetsContent)
+testBtn5:SetWidth(28)
+testBtn5:SetHeight(28)
+testBtn5:SetPoint("TOPLEFT", 208, -190)
+testBtn5:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false, tileSize = 1, edgeSize = 2,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+})
+testBtn5:SetBackdropColor(1, 0.3, 0.3, 0.6)
+testBtn5:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+local icon5 = testBtn5:CreateTexture(nil, "ARTWORK")
+icon5:SetAllPoints(testBtn5)
+icon5:SetTexture(GetTotemIcon("Frost Resistance Totem"))
+icon5:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = icon5, totemName = "Frost Resistance Totem"})
+
+-- Create border overlay frame on top of icon
+local borderOverlay5 = CreateFrame("Frame", nil, testBtn5)
+borderOverlay5:SetAllPoints(testBtn5)
+borderOverlay5:SetFrameLevel(testBtn5:GetFrameLevel() + 1)
+testBtn5.borderOverlay = borderOverlay5
+
+testBtn5.totemName = "Frost Resistance Totem"
+table.insert(fireButtons, testBtn5)
+testBtn5:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    for i = 1, 200 do
+        if GetSpellName(i, BOOKTYPE_SPELL) == this.totemName then
+            GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+            GameTooltip:Show()
+            return
+        end
+    end
+    GameTooltip:SetText(this.totemName)
+    GameTooltip:Show()
+end)
+testBtn5:SetScript("OnLeave", function() GameTooltip:Hide() end)
+testBtn5:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].fire = this.totemName
+    TotemNesia.DebugPrint("Set " .. set .. " Fire = " .. this.totemName)
+    UpdateFireBorders()
+end)
+
+-- EARTH TOTEMS SECTION (earthBtn1, e2-5)
+local earthLabel = totemSetsContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+earthLabel:SetPoint("TOPLEFT", 20, -235)
+earthLabel:SetText("Earth:")
+
+-- Earth Totem 1: Stoneclaw Totem
+local earthBtn1 = CreateFrame("Button", nil, totemSetsContent)
+earthBtn1:SetWidth(28)
+earthBtn1:SetHeight(28)
+earthBtn1:SetPoint("TOPLEFT", 80, -235)
+earthBtn1:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false, tileSize = 1, edgeSize = 2,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+})
+earthBtn1:SetBackdropColor(0.8, 0.6, 0.3, 0.6)
+earthBtn1:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+local earthIcon1 = earthBtn1:CreateTexture(nil, "ARTWORK")
+earthIcon1:SetAllPoints(earthBtn1)
+earthIcon1:SetTexture(GetTotemIcon("Stoneclaw Totem"))
+earthIcon1:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = earthIcon1, totemName = "Stoneclaw Totem"})
+local earthOverlay1 = CreateFrame("Frame", nil, earthBtn1)
+earthOverlay1:SetAllPoints(earthBtn1)
+earthOverlay1:SetFrameLevel(earthBtn1:GetFrameLevel() + 1)
+earthBtn1.borderOverlay = earthOverlay1
+earthBtn1.totemName = "Stoneclaw Totem"
+table.insert(earthButtons, earthBtn1)
+earthBtn1:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    for i = 1, 200 do
+        if GetSpellName(i, BOOKTYPE_SPELL) == this.totemName then
+            GameTooltip:SetSpell(i, BOOKTYPE_SPELL)
+            GameTooltip:Show()
+            return
+        end
+    end
+    GameTooltip:SetText(this.totemName)
+    GameTooltip:Show()
+end)
+earthBtn1:SetScript("OnLeave", function() GameTooltip:Hide() end)
+earthBtn1:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].earth = this.totemName
+    TotemNesia.DebugPrint("Set " .. set .. " Earth = " .. this.totemName)
+    UpdateEarthBorders()
+end)
+-- Earth 2: Stoneskin (112, -235)
+local e2=CreateFrame("Button",nil,totemSetsContent)
+e2:SetWidth(28) e2:SetHeight(28) e2:SetPoint("TOPLEFT",112,-235)
+e2:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+e2:SetBackdropColor(0.8,0.6,0.3,0.6) e2:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ei2=e2:CreateTexture(nil,"ARTWORK") ei2:SetAllPoints(e2) ei2:SetTexture(GetTotemIcon("Stoneskin Totem")) ei2:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ei2, totemName = "Stoneskin Totem"})
+local eo2=CreateFrame("Frame",nil,e2) eo2:SetAllPoints(e2) eo2:SetFrameLevel(e2:GetFrameLevel()+1) e2.borderOverlay=eo2
+e2.totemName="Stoneskin Totem" table.insert(earthButtons,e2)
+e2:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+e2:SetScript("OnLeave",function() GameTooltip:Hide() end)
+e2:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].earth=this.totemName TotemNesia.DebugPrint("Set "..set.." Earth = "..this.totemName) UpdateEarthBorders() end)
+
+-- Earth 3: Earthbind (144, -235)
+local e3=CreateFrame("Button",nil,totemSetsContent)
+e3:SetWidth(28) e3:SetHeight(28) e3:SetPoint("TOPLEFT",144,-235)
+e3:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+e3:SetBackdropColor(0.8,0.6,0.3,0.6) e3:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ei3=e3:CreateTexture(nil,"ARTWORK") ei3:SetAllPoints(e3) ei3:SetTexture(GetTotemIcon("Earthbind Totem")) ei3:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ei3, totemName = "Earthbind Totem"})
+local eo3=CreateFrame("Frame",nil,e3) eo3:SetAllPoints(e3) eo3:SetFrameLevel(e3:GetFrameLevel()+1) e3.borderOverlay=eo3
+e3.totemName="Earthbind Totem" table.insert(earthButtons,e3)
+e3:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+e3:SetScript("OnLeave",function() GameTooltip:Hide() end)
+e3:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].earth=this.totemName TotemNesia.DebugPrint("Set "..set.." Earth = "..this.totemName) UpdateEarthBorders() end)
+
+-- Earth 4: Strength of Earth (176, -235)
+local e4=CreateFrame("Button",nil,totemSetsContent)
+e4:SetWidth(28) e4:SetHeight(28) e4:SetPoint("TOPLEFT",176,-235)
+e4:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+e4:SetBackdropColor(0.8,0.6,0.3,0.6) e4:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ei4=e4:CreateTexture(nil,"ARTWORK") ei4:SetAllPoints(e4) ei4:SetTexture(GetTotemIcon("Strength of Earth Totem")) ei4:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ei4, totemName = "Strength of Earth Totem"})
+local eo4=CreateFrame("Frame",nil,e4) eo4:SetAllPoints(e4) eo4:SetFrameLevel(e4:GetFrameLevel()+1) e4.borderOverlay=eo4
+e4.totemName="Strength of Earth Totem" table.insert(earthButtons,e4)
+e4:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+e4:SetScript("OnLeave",function() GameTooltip:Hide() end)
+e4:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].earth=this.totemName TotemNesia.DebugPrint("Set "..set.." Earth = "..this.totemName) UpdateEarthBorders() end)
+
+-- Earth 5: Tremor (208, -235)
+local e5=CreateFrame("Button",nil,totemSetsContent)
+e5:SetWidth(28) e5:SetHeight(28) e5:SetPoint("TOPLEFT",208,-235)
+e5:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+e5:SetBackdropColor(0.8,0.6,0.3,0.6) e5:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ei5=e5:CreateTexture(nil,"ARTWORK") ei5:SetAllPoints(e5) ei5:SetTexture(GetTotemIcon("Tremor Totem")) ei5:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ei5, totemName = "Tremor Totem"})
+local eo5=CreateFrame("Frame",nil,e5) eo5:SetAllPoints(e5) eo5:SetFrameLevel(e5:GetFrameLevel()+1) e5.borderOverlay=eo5
+e5.totemName="Tremor Totem" table.insert(earthButtons,e5)
+e5:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+e5:SetScript("OnLeave",function() GameTooltip:Hide() end)
+e5:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].earth=this.totemName TotemNesia.DebugPrint("Set "..set.." Earth = "..this.totemName) UpdateEarthBorders() end)
+
+-- WATER TOTEMS (w1-5)
+local waterLabel=totemSetsContent:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+waterLabel:SetPoint("TOPLEFT",20,-280) waterLabel:SetText("Water:")
+
+-- Water 1: Healing Stream (80, -280)
+local w1=CreateFrame("Button",nil,totemSetsContent)
+w1:SetWidth(28) w1:SetHeight(28) w1:SetPoint("TOPLEFT",80,-280)
+w1:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+w1:SetBackdropColor(0.3,0.5,1,0.6) w1:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local wi1=w1:CreateTexture(nil,"ARTWORK") wi1:SetAllPoints(w1) wi1:SetTexture(GetTotemIcon("Healing Stream Totem")) wi1:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = wi1, totemName = "Healing Stream Totem"})
+local wo1=CreateFrame("Frame",nil,w1) wo1:SetAllPoints(w1) wo1:SetFrameLevel(w1:GetFrameLevel()+1) w1.borderOverlay=wo1
+w1.totemName="Healing Stream Totem" table.insert(waterButtons,w1)
+w1:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+w1:SetScript("OnLeave",function() GameTooltip:Hide() end)
+w1:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].water=this.totemName TotemNesia.DebugPrint("Set "..set.." Water = "..this.totemName) UpdateWaterBorders() end)
+
+-- Water 2: Mana Spring (112, -280)
+local w2=CreateFrame("Button",nil,totemSetsContent)
+w2:SetWidth(28) w2:SetHeight(28) w2:SetPoint("TOPLEFT",112,-280)
+w2:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+w2:SetBackdropColor(0.3,0.5,1,0.6) w2:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local wi2=w2:CreateTexture(nil,"ARTWORK") wi2:SetAllPoints(w2) wi2:SetTexture(GetTotemIcon("Mana Spring Totem")) wi2:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = wi2, totemName = "Mana Spring Totem"})
+local wo2=CreateFrame("Frame",nil,w2) wo2:SetAllPoints(w2) wo2:SetFrameLevel(w2:GetFrameLevel()+1) w2.borderOverlay=wo2
+w2.totemName="Mana Spring Totem" table.insert(waterButtons,w2)
+w2:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+w2:SetScript("OnLeave",function() GameTooltip:Hide() end)
+w2:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].water=this.totemName TotemNesia.DebugPrint("Set "..set.." Water = "..this.totemName) UpdateWaterBorders() end)
+
+-- Water 3: Fire Resistance (144, -280)
+local w3=CreateFrame("Button",nil,totemSetsContent)
+w3:SetWidth(28) w3:SetHeight(28) w3:SetPoint("TOPLEFT",144,-280)
+w3:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+w3:SetBackdropColor(0.3,0.5,1,0.6) w3:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local wi3=w3:CreateTexture(nil,"ARTWORK") wi3:SetAllPoints(w3) wi3:SetTexture(GetTotemIcon("Fire Resistance Totem")) wi3:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = wi3, totemName = "Fire Resistance Totem"})
+local wo3=CreateFrame("Frame",nil,w3) wo3:SetAllPoints(w3) wo3:SetFrameLevel(w3:GetFrameLevel()+1) w3.borderOverlay=wo3
+w3.totemName="Fire Resistance Totem" table.insert(waterButtons,w3)
+w3:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+w3:SetScript("OnLeave",function() GameTooltip:Hide() end)
+w3:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].water=this.totemName TotemNesia.DebugPrint("Set "..set.." Water = "..this.totemName) UpdateWaterBorders() end)
+
+-- Water 4: Disease Cleansing (176, -280)
+local w4=CreateFrame("Button",nil,totemSetsContent)
+w4:SetWidth(28) w4:SetHeight(28) w4:SetPoint("TOPLEFT",176,-280)
+w4:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+w4:SetBackdropColor(0.3,0.5,1,0.6) w4:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local wi4=w4:CreateTexture(nil,"ARTWORK") wi4:SetAllPoints(w4) wi4:SetTexture(GetTotemIcon("Disease Cleansing Totem")) wi4:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = wi4, totemName = "Disease Cleansing Totem"})
+local wo4=CreateFrame("Frame",nil,w4) wo4:SetAllPoints(w4) wo4:SetFrameLevel(w4:GetFrameLevel()+1) w4.borderOverlay=wo4
+w4.totemName="Disease Cleansing Totem" table.insert(waterButtons,w4)
+w4:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+w4:SetScript("OnLeave",function() GameTooltip:Hide() end)
+w4:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].water=this.totemName TotemNesia.DebugPrint("Set "..set.." Water = "..this.totemName) UpdateWaterBorders() end)
+
+-- Water 5: Poison Cleansing (208, -280)
+local w5=CreateFrame("Button",nil,totemSetsContent)
+w5:SetWidth(28) w5:SetHeight(28) w5:SetPoint("TOPLEFT",208,-280)
+w5:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+w5:SetBackdropColor(0.3,0.5,1,0.6) w5:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local wi5=w5:CreateTexture(nil,"ARTWORK") wi5:SetAllPoints(w5) wi5:SetTexture(GetTotemIcon("Poison Cleansing Totem")) wi5:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = wi5, totemName = "Poison Cleansing Totem"})
+local wo5=CreateFrame("Frame",nil,w5) wo5:SetAllPoints(w5) wo5:SetFrameLevel(w5:GetFrameLevel()+1) w5.borderOverlay=wo5
+w5.totemName="Poison Cleansing Totem" table.insert(waterButtons,w5)
+w5:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+w5:SetScript("OnLeave",function() GameTooltip:Hide() end)
+w5:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].water=this.totemName TotemNesia.DebugPrint("Set "..set.." Water = "..this.totemName) UpdateWaterBorders() end)
+
+-- AIR TOTEMS (a1-6)
+local airLabel=totemSetsContent:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
+airLabel:SetPoint("TOPLEFT",20,-325) airLabel:SetText("Air:")
+
+-- Air 1: Grounding (80, -325)
+local a1=CreateFrame("Button",nil,totemSetsContent)
+a1:SetWidth(28) a1:SetHeight(28) a1:SetPoint("TOPLEFT",80,-325)
+a1:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+a1:SetBackdropColor(0.7,0.9,1,0.6) a1:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ai1=a1:CreateTexture(nil,"ARTWORK") ai1:SetAllPoints(a1) ai1:SetTexture(GetTotemIcon("Grounding Totem")) ai1:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ai1, totemName = "Grounding Totem"})
+local ao1=CreateFrame("Frame",nil,a1) ao1:SetAllPoints(a1) ao1:SetFrameLevel(a1:GetFrameLevel()+1) a1.borderOverlay=ao1
+a1.totemName="Grounding Totem" table.insert(airButtons,a1)
+a1:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+a1:SetScript("OnLeave",function() GameTooltip:Hide() end)
+a1:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].air=this.totemName TotemNesia.DebugPrint("Set "..set.." Air = "..this.totemName) UpdateAirBorders() end)
+
+-- Air 2: Windfury (112, -325)
+local a2=CreateFrame("Button",nil,totemSetsContent)
+a2:SetWidth(28) a2:SetHeight(28) a2:SetPoint("TOPLEFT",112,-325)
+a2:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+a2:SetBackdropColor(0.7,0.9,1,0.6) a2:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ai2=a2:CreateTexture(nil,"ARTWORK") ai2:SetAllPoints(a2) ai2:SetTexture(GetTotemIcon("Windfury Totem")) ai2:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ai2, totemName = "Windfury Totem"})
+local ao2=CreateFrame("Frame",nil,a2) ao2:SetAllPoints(a2) ao2:SetFrameLevel(a2:GetFrameLevel()+1) a2.borderOverlay=ao2
+a2.totemName="Windfury Totem" table.insert(airButtons,a2)
+a2:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+a2:SetScript("OnLeave",function() GameTooltip:Hide() end)
+a2:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].air=this.totemName TotemNesia.DebugPrint("Set "..set.." Air = "..this.totemName) UpdateAirBorders() end)
+
+-- Air 3: Grace of Air (144, -325)
+local a3=CreateFrame("Button",nil,totemSetsContent)
+a3:SetWidth(28) a3:SetHeight(28) a3:SetPoint("TOPLEFT",144,-325)
+a3:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+a3:SetBackdropColor(0.7,0.9,1,0.6) a3:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ai3=a3:CreateTexture(nil,"ARTWORK") ai3:SetAllPoints(a3) ai3:SetTexture(GetTotemIcon("Grace of Air Totem")) ai3:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ai3, totemName = "Grace of Air Totem"})
+local ao3=CreateFrame("Frame",nil,a3) ao3:SetAllPoints(a3) ao3:SetFrameLevel(a3:GetFrameLevel()+1) a3.borderOverlay=ao3
+a3.totemName="Grace of Air Totem" table.insert(airButtons,a3)
+a3:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+a3:SetScript("OnLeave",function() GameTooltip:Hide() end)
+a3:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].air=this.totemName TotemNesia.DebugPrint("Set "..set.." Air = "..this.totemName) UpdateAirBorders() end)
+
+-- Air 4: Nature Resistance (176, -325)
+local a4=CreateFrame("Button",nil,totemSetsContent)
+a4:SetWidth(28) a4:SetHeight(28) a4:SetPoint("TOPLEFT",176,-325)
+a4:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+a4:SetBackdropColor(0.7,0.9,1,0.6) a4:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ai4=a4:CreateTexture(nil,"ARTWORK") ai4:SetAllPoints(a4) ai4:SetTexture(GetTotemIcon("Nature Resistance Totem")) ai4:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ai4, totemName = "Nature Resistance Totem"})
+local ao4=CreateFrame("Frame",nil,a4) ao4:SetAllPoints(a4) ao4:SetFrameLevel(a4:GetFrameLevel()+1) a4.borderOverlay=ao4
+a4.totemName="Nature Resistance Totem" table.insert(airButtons,a4)
+a4:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+a4:SetScript("OnLeave",function() GameTooltip:Hide() end)
+a4:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].air=this.totemName TotemNesia.DebugPrint("Set "..set.." Air = "..this.totemName) UpdateAirBorders() end)
+
+-- Air 5: Tranquil Air (208, -325)
+local a5=CreateFrame("Button",nil,totemSetsContent)
+a5:SetWidth(28) a5:SetHeight(28) a5:SetPoint("TOPLEFT",208,-325)
+a5:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+a5:SetBackdropColor(0.7,0.9,1,0.6) a5:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ai5=a5:CreateTexture(nil,"ARTWORK") ai5:SetAllPoints(a5) ai5:SetTexture(GetTotemIcon("Tranquil Air Totem")) ai5:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ai5, totemName = "Tranquil Air Totem"})
+local ao5=CreateFrame("Frame",nil,a5) ao5:SetAllPoints(a5) ao5:SetFrameLevel(a5:GetFrameLevel()+1) a5.borderOverlay=ao5
+a5.totemName="Tranquil Air Totem" table.insert(airButtons,a5)
+a5:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+a5:SetScript("OnLeave",function() GameTooltip:Hide() end)
+a5:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].air=this.totemName TotemNesia.DebugPrint("Set "..set.." Air = "..this.totemName) UpdateAirBorders() end)
+
+-- Air 6: Windwall (240, -325)
+local a6=CreateFrame("Button",nil,totemSetsContent)
+a6:SetWidth(28) a6:SetHeight(28) a6:SetPoint("TOPLEFT",240,-325)
+a6:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8",edgeFile="Interface\\Buttons\\WHITE8X8",tile=false,tileSize=1,edgeSize=2,insets={left=0,right=0,top=0,bottom=0}})
+a6:SetBackdropColor(0.7,0.9,1,0.6) a6:SetBackdropBorderColor(0.3,0.3,0.3,1)
+local ai6=a6:CreateTexture(nil,"ARTWORK") ai6:SetAllPoints(a6) ai6:SetTexture(GetTotemIcon("Windwall Totem")) ai6:SetTexCoord(0.08,0.92,0.08,0.92)
+table.insert(TotemNesia.totemIcons, {iconTexture = ai6, totemName = "Windwall Totem"})
+local ao6=CreateFrame("Frame",nil,a6) ao6:SetAllPoints(a6) ao6:SetFrameLevel(a6:GetFrameLevel()+1) a6.borderOverlay=ao6
+a6.totemName="Windwall Totem" table.insert(airButtons,a6)
+a6:SetScript("OnEnter",function() GameTooltip:SetOwner(this,"ANCHOR_RIGHT") for i=1,200 do if GetSpellName(i,BOOKTYPE_SPELL)==this.totemName then GameTooltip:SetSpell(i,BOOKTYPE_SPELL) GameTooltip:Show() return end end GameTooltip:SetText(this.totemName) GameTooltip:Show() end)
+a6:SetScript("OnLeave",function() GameTooltip:Hide() end)
+a6:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNesiaDB.totemSets[set].air=this.totemName TotemNesia.DebugPrint("Set "..set.." Air = "..this.totemName) UpdateAirBorders() end)
+
+
+-- NOTE: Don't call UpdateFireBorders() here - TotemNesiaDB isn't initialized yet!
+-- It will be called when buttons are clicked or tabs are switched
+
+-- LEFT COLUMN (now in settingsContent)
 -- Lock Recall Notification checkbox
-local lockCheckbox = CreateFrame("CheckButton", "TotemNesiaLockCheckbox", optionsMenu, "UICheckButtonTemplate")
+local lockCheckbox = CreateFrame("CheckButton", "TotemNesiaLockCheckbox", settingsContent, "UICheckButtonTemplate")
 lockCheckbox:SetPoint("TOPLEFT", 20, -45)
 lockCheckbox:SetWidth(24)
 lockCheckbox:SetHeight(24)
@@ -1307,7 +2084,7 @@ lockCheckbox:SetScript("OnClick", function()
 end)
 
 -- Mute audio queue checkbox
-local muteCheckbox = CreateFrame("CheckButton", "TotemNesiaMuteCheckbox", optionsMenu, "UICheckButtonTemplate")
+local muteCheckbox = CreateFrame("CheckButton", "TotemNesiaMuteCheckbox", settingsContent, "UICheckButtonTemplate")
 muteCheckbox:SetPoint("TOPLEFT", 20, -75)
 muteCheckbox:SetWidth(24)
 muteCheckbox:SetHeight(24)
@@ -1319,7 +2096,7 @@ muteCheckbox:SetScript("OnClick", function()
 end)
 
 -- Hide Recall Notification checkbox
-local hideUICheckbox = CreateFrame("CheckButton", "TotemNesiaHideUICheckbox", optionsMenu, "UICheckButtonTemplate")
+local hideUICheckbox = CreateFrame("CheckButton", "TotemNesiaHideUICheckbox", settingsContent, "UICheckButtonTemplate")
 hideUICheckbox:SetPoint("TOPLEFT", 20, -105)
 hideUICheckbox:SetWidth(24)
 hideUICheckbox:SetHeight(24)
@@ -1331,7 +2108,7 @@ hideUICheckbox:SetScript("OnClick", function()
 end)
 
 -- Enable Totem Bar checkbox
-local enableTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaEnableTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
+local enableTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaEnableTotemBarCheckbox", settingsContent, "UICheckButtonTemplate")
 enableTotemBarCheckbox:SetPoint("TOPLEFT", 20, -135)
 enableTotemBarCheckbox:SetWidth(24)
 enableTotemBarCheckbox:SetHeight(24)
@@ -1345,7 +2122,7 @@ end)
 
 -- RIGHT COLUMN
 -- Lock Totem Tracker checkbox
-local lockTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
+local lockTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCheckbox", settingsContent, "UICheckButtonTemplate")
 lockTotemBarCheckbox:SetPoint("TOPLEFT", 210, -45)
 lockTotemBarCheckbox:SetWidth(24)
 lockTotemBarCheckbox:SetHeight(24)
@@ -1362,7 +2139,7 @@ lockTotemBarCheckbox:SetScript("OnClick", function()
 end)
 
 -- Hide Totem Tracker checkbox
-local hideTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaHideTotemBarCheckbox", optionsMenu, "UICheckButtonTemplate")
+local hideTotemBarCheckbox = CreateFrame("CheckButton", "TotemNesiaHideTotemBarCheckbox", settingsContent, "UICheckButtonTemplate")
 hideTotemBarCheckbox:SetPoint("TOPLEFT", 210, -75)
 hideTotemBarCheckbox:SetWidth(24)
 hideTotemBarCheckbox:SetHeight(24)
@@ -1375,7 +2152,7 @@ hideTotemBarCheckbox:SetScript("OnClick", function()
 end)
 
 -- Lock Totem Bar checkbox
-local lockTotemBarCastCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCastCheckbox", optionsMenu, "UICheckButtonTemplate")
+local lockTotemBarCastCheckbox = CreateFrame("CheckButton", "TotemNesiaLockTotemBarCastCheckbox", settingsContent, "UICheckButtonTemplate")
 lockTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -105)
 lockTotemBarCastCheckbox:SetWidth(24)
 lockTotemBarCastCheckbox:SetHeight(24)
@@ -1392,7 +2169,7 @@ lockTotemBarCastCheckbox:SetScript("OnClick", function()
 end)
 
 -- Hide Totem Bar checkbox
-local hideTotemBarCastCheckbox = CreateFrame("CheckButton", "TotemNesiaHideTotemBarCastCheckbox", optionsMenu, "UICheckButtonTemplate")
+local hideTotemBarCastCheckbox = CreateFrame("CheckButton", "TotemNesiaHideTotemBarCastCheckbox", settingsContent, "UICheckButtonTemplate")
 hideTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -135)
 hideTotemBarCastCheckbox:SetWidth(24)
 hideTotemBarCastCheckbox:SetHeight(24)
@@ -1405,7 +2182,7 @@ hideTotemBarCastCheckbox:SetScript("OnClick", function()
 end)
 
 -- Hide Weapon Enchant Slot checkbox
-local hideWeaponSlotCheckbox = CreateFrame("CheckButton", "TotemNesiaHideWeaponSlotCheckbox", optionsMenu, "UICheckButtonTemplate")
+local hideWeaponSlotCheckbox = CreateFrame("CheckButton", "TotemNesiaHideWeaponSlotCheckbox", settingsContent, "UICheckButtonTemplate")
 hideWeaponSlotCheckbox:SetPoint("TOPLEFT", 210, -160)
 hideWeaponSlotCheckbox:SetWidth(24)
 hideWeaponSlotCheckbox:SetHeight(24)
@@ -1418,12 +2195,12 @@ hideWeaponSlotCheckbox:SetScript("OnClick", function()
 end)
 
 -- LEFT SIDE: "Will be enabled when in:" section
-local enabledWhenLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local enabledWhenLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 enabledWhenLabel:SetPoint("TOPLEFT", 20, -190)
 enabledWhenLabel:SetText("Will be enabled when in:")
 
 -- Solo checkbox (vertical stack)
-local soloCheckbox = CreateFrame("CheckButton", "TotemNesiaSoloCheckbox", optionsMenu, "UICheckButtonTemplate")
+local soloCheckbox = CreateFrame("CheckButton", "TotemNesiaSoloCheckbox", settingsContent, "UICheckButtonTemplate")
 soloCheckbox:SetPoint("TOPLEFT", 20, -210)
 soloCheckbox:SetWidth(24)
 soloCheckbox:SetHeight(24)
@@ -1435,7 +2212,7 @@ soloCheckbox:SetScript("OnClick", function()
 end)
 
 -- Parties checkbox
-local partyCheckbox = CreateFrame("CheckButton", "TotemNesiaPartyCheckbox", optionsMenu, "UICheckButtonTemplate")
+local partyCheckbox = CreateFrame("CheckButton", "TotemNesiaPartyCheckbox", settingsContent, "UICheckButtonTemplate")
 partyCheckbox:SetPoint("TOPLEFT", 20, -235)
 partyCheckbox:SetWidth(24)
 partyCheckbox:SetHeight(24)
@@ -1447,7 +2224,7 @@ partyCheckbox:SetScript("OnClick", function()
 end)
 
 -- Raids checkbox
-local raidCheckbox = CreateFrame("CheckButton", "TotemNesiaRaidCheckbox", optionsMenu, "UICheckButtonTemplate")
+local raidCheckbox = CreateFrame("CheckButton", "TotemNesiaRaidCheckbox", settingsContent, "UICheckButtonTemplate")
 raidCheckbox:SetPoint("TOPLEFT", 20, -260)
 raidCheckbox:SetWidth(24)
 raidCheckbox:SetHeight(24)
@@ -1459,24 +2236,24 @@ raidCheckbox:SetScript("OnClick", function()
 end)
 
 -- RIGHT SIDE: Totem Bar Layout toggle button
-local layoutButton = CreateFrame("Button", "TotemNesiaLayoutButton", optionsMenu, "UIPanelButtonTemplate")
+local layoutButton = CreateFrame("Button", "TotemNesiaLayoutButton", settingsContent, "UIPanelButtonTemplate")
 layoutButton:SetWidth(120)
 layoutButton:SetHeight(24)
 layoutButton:SetPoint("TOPRIGHT", -20, -205)
 layoutButton:SetText("Horizontal")  -- Default text, will be updated when options open
 
-local layoutLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local layoutLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 layoutLabel:SetPoint("BOTTOM", layoutButton, "TOP", 0, 2)
 layoutLabel:SetText("Totem Bar Layout:")
 
 -- Flyout Direction toggle button (create before layout OnClick so we can reference it)
-local flyoutButton = CreateFrame("Button", "TotemNesiaFlyoutButton", optionsMenu, "UIPanelButtonTemplate")
+local flyoutButton = CreateFrame("Button", "TotemNesiaFlyoutButton", settingsContent, "UIPanelButtonTemplate")
 flyoutButton:SetWidth(120)
 flyoutButton:SetHeight(24)
 flyoutButton:SetPoint("TOPRIGHT", -20, -255)
 flyoutButton:SetText("Up")  -- Default text, will be updated when options open
 
-local flyoutLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local flyoutLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 flyoutLabel:SetPoint("BOTTOM", flyoutButton, "TOP", 0, 2)
 flyoutLabel:SetText("Flyout Direction:")
 
@@ -1489,7 +2266,7 @@ layoutButton:SetScript("OnClick", function()
         TotemNesiaDB.totemBarFlyoutDirection = "Right"
         flyoutButton:SetText("Right")
         if TotemNesiaDB.debugMode then
-            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Layout changed to Vertical, flyout direction set to Right")
+            TotemNesia.DebugPrint("Layout changed to Vertical, flyout direction set to Right")
         end
     else
         TotemNesiaDB.totemBarLayout = "Horizontal"
@@ -1498,7 +2275,7 @@ layoutButton:SetScript("OnClick", function()
         TotemNesiaDB.totemBarFlyoutDirection = "Up"
         flyoutButton:SetText("Up")
         if TotemNesiaDB.debugMode then
-            DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Layout changed to Horizontal, flyout direction set to Up")
+            TotemNesia.DebugPrint("Layout changed to Horizontal, flyout direction set to Up")
         end
     end
     TotemNesia.UpdateTotemBar()
@@ -1533,12 +2310,12 @@ flyoutButton:SetScript("OnClick", function()
 end)
 
 -- Timer duration label
-local timerLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local timerLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 timerLabel:SetPoint("TOP", 0, -285)
 timerLabel:SetText("Display Duration: 15s")
 
 -- Timer duration slider
-local timerSlider = CreateFrame("Slider", "TotemNesiaTimerSlider", optionsMenu)
+local timerSlider = CreateFrame("Slider", "TotemNesiaTimerSlider", settingsContent)
 timerSlider:SetPoint("TOP", 0, -305)
 timerSlider:SetWidth(350)
 timerSlider:SetHeight(15)
@@ -1571,12 +2348,12 @@ timerSlider:SetScript("OnValueChanged", function()
 end)
 
 -- Recall Notification Scale label
-local uiScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local uiScaleLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 uiScaleLabel:SetPoint("TOP", 0, -330)
 uiScaleLabel:SetText("Recall Notification Scale: 1.0")
 
 -- Recall Notification Scale slider
-local uiScaleSlider = CreateFrame("Slider", "TotemNesiaUIScaleSlider", optionsMenu)
+local uiScaleSlider = CreateFrame("Slider", "TotemNesiaUIScaleSlider", settingsContent)
 uiScaleSlider:SetPoint("TOP", 0, -350)
 uiScaleSlider:SetWidth(350)
 uiScaleSlider:SetHeight(15)
@@ -1604,12 +2381,12 @@ uiScaleSlider:SetScript("OnValueChanged", function()
 end)
 
 -- Totem Tracker Scale label
-local trackerScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local trackerScaleLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 trackerScaleLabel:SetPoint("TOP", 0, -375)
 trackerScaleLabel:SetText("Totem Tracker Scale: 1.0")
 
 -- Totem Tracker Scale slider
-local trackerScaleSlider = CreateFrame("Slider", "TotemNesiaTrackerScaleSlider", optionsMenu)
+local trackerScaleSlider = CreateFrame("Slider", "TotemNesiaTrackerScaleSlider", settingsContent)
 trackerScaleSlider:SetPoint("TOP", 0, -395)
 trackerScaleSlider:SetWidth(350)
 trackerScaleSlider:SetHeight(15)
@@ -1637,12 +2414,12 @@ trackerScaleSlider:SetScript("OnValueChanged", function()
 end)
 
 -- Totem Bar Scale label
-local barScaleLabel = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local barScaleLabel = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 barScaleLabel:SetPoint("TOP", 0, -420)
 barScaleLabel:SetText("Totem Bar Scale: 1.0")
 
 -- Totem Bar Scale slider
-local barScaleSlider = CreateFrame("Slider", "TotemNesiaBarScaleSlider", optionsMenu)
+local barScaleSlider = CreateFrame("Slider", "TotemNesiaBarScaleSlider", settingsContent)
 barScaleSlider:SetPoint("TOP", 0, -440)
 barScaleSlider:SetWidth(350)
 barScaleSlider:SetHeight(15)
@@ -1670,14 +2447,14 @@ barScaleSlider:SetScript("OnValueChanged", function()
 end)
 
 -- Keybind macros section
-local keybindTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local keybindTitle = settingsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 keybindTitle:SetPoint("TOP", 0, -470)
 keybindTitle:SetWidth(360)
 keybindTitle:SetJustifyH("CENTER")
 keybindTitle:SetText("Keybinds: Sequential Totem Cast keybind available in ESC > Key Bindings > TotemNesia")
 
 -- Recall macro EditBox
-local keybind1 = CreateFrame("EditBox", nil, optionsMenu)
+local keybind1 = CreateFrame("EditBox", nil, settingsContent)
 keybind1:SetPoint("TOPLEFT", 20, -490)
 keybind1:SetWidth(360)
 keybind1:SetHeight(20)
@@ -1707,7 +2484,7 @@ keybind1:SetScript("OnTextChanged", function()
 end)
 
 -- Debug mode checkbox (bottom right corner)
-local debugCheckbox = CreateFrame("CheckButton", "TotemNesiaDebugCheckbox", optionsMenu, "UICheckButtonTemplate")
+local debugCheckbox = CreateFrame("CheckButton", "TotemNesiaDebugCheckbox", settingsContent, "UICheckButtonTemplate")
 debugCheckbox:SetPoint("BOTTOMRIGHT", -20, 10)
 debugCheckbox:SetWidth(24)
 debugCheckbox:SetHeight(24)
@@ -1724,18 +2501,20 @@ function TotemNesia.UpdateMinimapButton()
     local x = math.cos(angle) * 80
     local y = math.sin(angle) * 80
     minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
+    
+    -- Ensure button is visible unless explicitly hidden
+    if not TotemNesiaDB.minimapHidden then
+        minimapButton:Show()
+    end
 end
 
 -- Minimap button tooltip
 minimapButton:SetScript("OnEnter", function()
+    -- TODO: Show context menu in future version
     GameTooltip:SetOwner(this, "ANCHOR_LEFT")
     GameTooltip:SetText("TotemNesia")
-    GameTooltip:AddLine("Click to open options", 1, 1, 1)
-    GameTooltip:AddLine(" ", 1, 1, 1)
-    local lockStatus = TotemNesiaDB.isLocked and "|cffff0000Locked|r" or "|cff00ff00Unlocked|r"
-    local audioStatus = TotemNesiaDB.audioEnabled and "|cff00ff00Unmuted|r" or "|cffff0000Muted|r"
-    GameTooltip:AddLine("Status: " .. lockStatus .. ", " .. audioStatus, 1, 1, 1)
-    GameTooltip:AddLine("Timer: " .. TotemNesiaDB.timerDuration .. "s", 1, 1, 1)
+    GameTooltip:AddLine("Click to open Settings", 1, 1, 1)
+    GameTooltip:AddLine("Right-click to drag", 0.6, 0.6, 0.6)
     GameTooltip:Show()
 end)
 
@@ -1780,8 +2559,8 @@ minimapButton:SetScript("OnClick", function()
     end
 end)
 
--- Dragging around minimap
-minimapButton:RegisterForDrag("LeftButton")
+-- Dragging around minimap (right-click)
+minimapButton:RegisterForDrag("RightButton")
 minimapButton:SetScript("OnDragStart", function()
     this:SetScript("OnUpdate", function()
         local mx, my = Minimap:GetCenter()
@@ -1968,12 +2747,12 @@ function TotemNesia.ToggleLock()
         if not TotemNesia.displayTimer or TotemNesia.displayTimer <= 0 then
             iconFrame:Hide()
         end
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame locked.")
+        TotemNesia.DebugPrint("Frame locked")
     else
         iconFrame:SetBackdropColor(0, 0, 0, 1)
         iconFrame:RegisterForClicks()
         iconFrame:Show()
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame unlocked. Drag to reposition.")
+        TotemNesia.DebugPrint("Frame unlocked. Drag to reposition")
     end
 end
 
@@ -1981,42 +2760,10 @@ end
 function TotemNesia.ResetPosition()
     iconFrame:ClearAllPoints()
     iconFrame:SetPoint("CENTER", 0, 200)
-    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Frame position reset to center.")
+    TotemNesia.DebugPrint("Frame position reset to center")
 end
 
 -- Sequential totem casting function (cycles through Fire -> Earth -> Water -> Air)
-function TotemNesia.CastNextTotem()
-    -- Check for timeout (5 seconds of inactivity resets to fire)
-    local currentTime = GetTime()
-    if currentTime - TotemNesia.sequentialCastLastTime > 5 then
-        TotemNesia.sequentialCastIndex = 1
-        TotemNesia.DebugPrint("Sequential cast timeout - reset to Fire")
-    end
-    
-    -- Element order: fire, earth, water, air
-    local elementOrder = {"fire", "earth", "water", "air"}
-    local element = elementOrder[TotemNesia.sequentialCastIndex]
-    
-    -- Get the selected totem for this element from the totem bar
-    local slot = TotemNesia.totemBarSlots[element]
-    if slot and slot.selectedTotem then
-        local totemName = slot.selectedTotem
-        TotemNesia.DebugPrint("Sequential cast: " .. element .. " - " .. totemName)
-        CastSpellByName(totemName)
-    else
-        TotemNesia.DebugPrint("Sequential cast: No totem assigned to " .. element .. " slot")
-    end
-    
-    -- Advance to next element (with wraparound)
-    TotemNesia.sequentialCastIndex = TotemNesia.sequentialCastIndex + 1
-    if TotemNesia.sequentialCastIndex > 4 then
-        TotemNesia.sequentialCastIndex = 1
-    end
-    
-    -- Update last cast time
-    TotemNesia.sequentialCastLastTime = currentTime
-end
-
 -- Event frame
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -2028,6 +2775,7 @@ eventFrame:RegisterEvent("SPELLS_CHANGED")  -- Fires when player learns new spel
 eventFrame:SetScript("OnEvent", function()
     if event == "PLAYER_LOGIN" then
         TotemNesia.InitDB()
+        TotemNesia.DetectNampower()
         TotemNesia.UpdateMinimapButton()
         TotemNesia.UpdateTotemTracker()
         TotemNesia.UpdateTotemBar()
@@ -2035,6 +2783,9 @@ eventFrame:SetScript("OnEvent", function()
         
         -- Refresh flyout icons now that spellbook is loaded
         TotemNesia.RefreshFlyoutIcons()
+        
+        -- Refresh totem set icons now that spellbook is loaded
+        TotemNesia.RefreshTotemSetIcons()
         
         -- Apply scales
         iconFrame:SetScale(TotemNesiaDB.uiFrameScale)
@@ -2057,6 +2808,8 @@ eventFrame:SetScript("OnEvent", function()
         
         if TotemNesiaDB.minimapHidden then
             minimapButton:Hide()
+        else
+            minimapButton:Show()
         end
         
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -2115,6 +2868,7 @@ eventFrame:SetScript("OnEvent", function()
     elseif event == "SPELLS_CHANGED" then
         -- Spellbook changed (learned new spell, respec, etc.) - refresh flyout icons
         TotemNesia.RefreshFlyoutIcons()
+        TotemNesia.RefreshTotemSetIcons()
     end
 end)
 
@@ -2215,7 +2969,7 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
     end
 end
 
-DEFAULT_CHAT_FRAME:AddMessage("TotemNesia loaded. Type /tn to open options.")
+DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v3.4.40 loaded. Type /tn for options.")
 
 -- Helper function for keybind macro (users create their own macro)
 function TotemNesia_RecallTotems()
@@ -2236,11 +2990,107 @@ function TotemNesia_RecallTotems()
     end
 end
 
+-- Sequential totem casting function
+function TotemNesia.CastNextTotem(setNumber)
+    -- Safety checks
+    if not TotemNesiaDB or not TotemNesiaDB.totemSets then
+        TotemNesia.DebugPrint("Database not initialized")
+        return
+    end
+    
+    if not TotemNesiaDB.totemSets[setNumber] then
+        TotemNesia.DebugPrint("Set " .. setNumber .. " not found")
+        return
+    end
+    
+    local set = TotemNesiaDB.totemSets[setNumber]
+    
+    -- NAMPOWER MODE: Cast all 4 totems instantly
+    if TotemNesia.hasNampower then
+        local castCount = 0
+        
+        if set.fire and set.fire ~= "" then
+            CastSpellByName(set.fire)
+            castCount = castCount + 1
+        end
+        
+        if set.earth and set.earth ~= "" then
+            CastSpellByName(set.earth)
+            castCount = castCount + 1
+        end
+        
+        if set.water and set.water ~= "" then
+            CastSpellByName(set.water)
+            castCount = castCount + 1
+        end
+        
+        if set.air and set.air ~= "" then
+            CastSpellByName(set.air)
+            castCount = castCount + 1
+        end
+        
+        if castCount > 0 then
+            TotemNesia.DebugPrint("Cast " .. castCount .. " totems from Set " .. setNumber .. " (Nampower)")
+        else
+            TotemNesia.DebugPrint("No totems assigned to Set " .. setNumber)
+        end
+        
+        return
+    end
+    
+    -- SEQUENTIAL MODE: Cast one totem at a time for non-nampower users
+    -- Check for timeout (10 seconds of inactivity resets to Fire)
+    local currentTime = GetTime()
+    if currentTime - TotemNesia.sequentialCastLastTime > 10 then
+        TotemNesia.sequentialCastIndex = 1
+    end
+    
+    -- Determine which totem to cast based on sequence index
+    local totemName = nil
+    local familyName = nil
+    
+    if TotemNesia.sequentialCastIndex == 1 then
+        totemName = set.fire
+        familyName = "Fire"
+    elseif TotemNesia.sequentialCastIndex == 2 then
+        totemName = set.earth
+        familyName = "Earth"
+    elseif TotemNesia.sequentialCastIndex == 3 then
+        totemName = set.water
+        familyName = "Water"
+    elseif TotemNesia.sequentialCastIndex == 4 then
+        totemName = set.air
+        familyName = "Air"
+    end
+    
+    -- Cast the totem if one is assigned
+    if totemName and totemName ~= "" then
+        CastSpellByName(totemName)
+        TotemNesia.DebugPrint("Casting " .. totemName .. " (Set " .. setNumber .. ", " .. familyName .. " " .. TotemNesia.sequentialCastIndex .. "/4)")
+    else
+        TotemNesia.DebugPrint("No " .. (familyName or "totem") .. " assigned to Set " .. setNumber)
+    end
+    
+    -- Advance to next totem in sequence
+    TotemNesia.sequentialCastIndex = TotemNesia.sequentialCastIndex + 1
+    if TotemNesia.sequentialCastIndex > 4 then
+        TotemNesia.sequentialCastIndex = 1
+        TotemNesia.DebugPrint("Sequence complete, resetting to Fire")
+    end
+    
+    -- Update last cast time
+    TotemNesia.sequentialCastLastTime = GetTime()
+end
+
 -- Helper function for sequential totem casting keybind
-function TotemNesia_CastNextTotem()
+function TotemNesia_CastNextTotem(setNumber)
     if not IsShaman() then
         return
     end
     
-    TotemNesia.CastNextTotem()
+    if not setNumber then
+        setNumber = TotemNesiaDB.currentTotemSet or 1
+    end
+    
+    TotemNesia.CastNextTotem(setNumber)
 end
