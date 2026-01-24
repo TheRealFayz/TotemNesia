@@ -14,6 +14,8 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Flexible layouts** - Horizontal or Vertical orientation with smart flyout positioning
 - **Independent controls** - Separate lock, hide, and scale settings
 
+![Totem Bar](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png)
+
 ### Weapon Enchant Slot (5th Slot)
 - **Automatic icon display** - Shows your currently active weapon enchant
 - **Flyout menu** - Access all weapon enchants (Rockbiter, Flametongue, Frostbrand, Windfury)
@@ -52,8 +54,6 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Elemental indicators** - 16x16 pixel indicators positioned to match in-game totem layout
 - **Fully customizable** - Drag to position, lock in place, hide completely, or scale from 50% to 200%
 
-![Totem Tracker and Recall Interface](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png)
-
 ### Totemic Recall Notification
 - **Clickable interface** - Click the icon to instantly recall all totems
 - **Keybind support** - Create a macro to recall totems with a hotkey
@@ -63,6 +63,8 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Combat-aware** - Automatically hides when you re-enter combat
 - **Audio notification** - Optional sound alert when notification appears
 - **Scalable** - Adjust size from 50% to 200%
+
+![Totem Tracker and Recall Interface](https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png)
 
 ### Smart Detection
 - **Combat log tracking** - Monitors individual totem summons and expirations
