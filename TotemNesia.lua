@@ -56,6 +56,7 @@ TotemNesia.sequentialCastIndex = 1  -- Track position in sequential totem castin
 TotemNesia.sequentialCastLastTime = 0  -- Track last cast time for timeout reset
 TotemNesia.hasNampower = false  -- Whether nampower client mod is detected
 TotemNesia.nampowerVersion = nil  -- Nampower version if detected
+TotemNesia.updateNotified = false  -- Track if update notification has been shown this session
 
 -- Check for nampower client mod
 function TotemNesia.DetectNampower()
@@ -70,6 +71,39 @@ function TotemNesia.DetectNampower()
     end
     TotemNesia.hasNampower = false
     return false
+end
+
+-- Get addon version from TOC file (e.g., "3.4.41")
+function TotemNesia.GetVersion()
+    return tostring(GetAddOnMetadata("TotemNesia", "Version"))
+end
+
+-- Convert version string to comparable number (e.g., "3.4.41" -> 30441)
+function TotemNesia.GetVersionNumber()
+    local versionStr = TotemNesia.GetVersion()
+    local major, minor, patch = string.match(versionStr, "(%d+)%.(%d+)%.(%d+)")
+    major = tonumber(major) or 0
+    minor = tonumber(minor) or 0
+    patch = tonumber(patch) or 0
+    return major * 10000 + minor * 100 + patch
+end
+
+-- Send version info to party/raid members
+function TotemNesia.BroadcastVersion()
+    if GetNumRaidMembers() > 0 then
+        SendAddonMessage("TotemNesia", "VER:" .. TotemNesia.GetVersionNumber(), "RAID")
+    elseif GetNumPartyMembers() > 0 then
+        SendAddonMessage("TotemNesia", "VER:" .. TotemNesia.GetVersionNumber(), "PARTY")
+    end
+end
+
+-- Check if remote version is newer and notify player
+function TotemNesia.CheckRemoteVersion(remoteVersion)
+    local localVersion = TotemNesia.GetVersionNumber()
+    if tonumber(remoteVersion) > localVersion and not TotemNesia.updateNotified then
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: There is a new version of TotemNesia available, download it at https://github.com/TheRealFayz/TotemNesia")
+        TotemNesia.updateNotified = true
+    end
 end
 
 -- Track all totem icon textures for refreshing after spellbook loads
@@ -1544,6 +1578,29 @@ local fireLabel = totemSetsContent:CreateFontString(nil, "OVERLAY", "GameFontNor
 fireLabel:SetPoint("TOPLEFT", 20, -190)
 fireLabel:SetText("Fire:")
 
+-- Fire Clear Button
+local fireClearBtn = CreateFrame("Button", nil, totemSetsContent)
+fireClearBtn:SetWidth(20)
+fireClearBtn:SetHeight(20)
+fireClearBtn:SetPoint("TOPLEFT", 60, -194)
+fireClearBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+fireClearBtn:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+fireClearBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+fireClearBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Clear Fire totem assignment")
+    GameTooltip:Show()
+end)
+fireClearBtn:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+fireClearBtn:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].fire = nil
+    TotemNesia.DebugPrint("Cleared Set " .. set .. " Fire totem")
+    UpdateFireBorders()
+end)
+
 -- Fire 1: Searing Totem
 local testBtn = CreateFrame("Button", nil, totemSetsContent)
 testBtn:SetWidth(28)
@@ -1808,6 +1865,29 @@ local earthLabel = totemSetsContent:CreateFontString(nil, "OVERLAY", "GameFontNo
 earthLabel:SetPoint("TOPLEFT", 20, -235)
 earthLabel:SetText("Earth:")
 
+-- Earth Clear Button
+local earthClearBtn = CreateFrame("Button", nil, totemSetsContent)
+earthClearBtn:SetWidth(20)
+earthClearBtn:SetHeight(20)
+earthClearBtn:SetPoint("TOPLEFT", 60, -239)
+earthClearBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+earthClearBtn:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+earthClearBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+earthClearBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Clear Earth totem assignment")
+    GameTooltip:Show()
+end)
+earthClearBtn:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+earthClearBtn:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].earth = nil
+    TotemNesia.DebugPrint("Cleared Set " .. set .. " Earth totem")
+    UpdateEarthBorders()
+end)
+
 -- Earth Totem 1: Stoneclaw Totem
 local earthBtn1 = CreateFrame("Button", nil, totemSetsContent)
 earthBtn1:SetWidth(28)
@@ -1907,6 +1987,29 @@ e5:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNe
 local waterLabel=totemSetsContent:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
 waterLabel:SetPoint("TOPLEFT",20,-280) waterLabel:SetText("Water:")
 
+-- Water Clear Button
+local waterClearBtn = CreateFrame("Button", nil, totemSetsContent)
+waterClearBtn:SetWidth(20)
+waterClearBtn:SetHeight(20)
+waterClearBtn:SetPoint("TOPLEFT", 60, -284)
+waterClearBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+waterClearBtn:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+waterClearBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+waterClearBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Clear Water totem assignment")
+    GameTooltip:Show()
+end)
+waterClearBtn:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+waterClearBtn:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].water = nil
+    TotemNesia.DebugPrint("Cleared Set " .. set .. " Water totem")
+    UpdateWaterBorders()
+end)
+
 -- Water 1: Healing Stream (80, -280)
 local w1=CreateFrame("Button",nil,totemSetsContent)
 w1:SetWidth(28) w1:SetHeight(28) w1:SetPoint("TOPLEFT",80,-280)
@@ -1975,6 +2078,29 @@ w5:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNe
 -- AIR TOTEMS (a1-6)
 local airLabel=totemSetsContent:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
 airLabel:SetPoint("TOPLEFT",20,-325) airLabel:SetText("Air:")
+
+-- Air Clear Button
+local airClearBtn = CreateFrame("Button", nil, totemSetsContent)
+airClearBtn:SetWidth(20)
+airClearBtn:SetHeight(20)
+airClearBtn:SetPoint("TOPLEFT", 60, -329)
+airClearBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+airClearBtn:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+airClearBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+airClearBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Clear Air totem assignment")
+    GameTooltip:Show()
+end)
+airClearBtn:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+airClearBtn:SetScript("OnClick", function()
+    local set = TotemNesiaDB.currentTotemSet
+    TotemNesiaDB.totemSets[set].air = nil
+    TotemNesia.DebugPrint("Cleared Set " .. set .. " Air totem")
+    UpdateAirBorders()
+end)
 
 -- Air 1: Grounding (80, -325)
 local a1=CreateFrame("Button",nil,totemSetsContent)
@@ -2771,6 +2897,9 @@ eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("SPELLS_CHANGED")  -- Fires when player learns new spells
+eventFrame:RegisterEvent("CHAT_MSG_ADDON")  -- For version checking
+eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")  -- For broadcasting version on party join
+eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")  -- For broadcasting version on raid join
 
 eventFrame:SetScript("OnEvent", function()
     if event == "PLAYER_LOGIN" then
@@ -2780,6 +2909,9 @@ eventFrame:SetScript("OnEvent", function()
         TotemNesia.UpdateTotemTracker()
         TotemNesia.UpdateTotemBar()
         TotemNesia.UpdateTotemBarFlyouts()
+        
+        -- Register addon communication for version checking
+        RegisterAddonMessagePrefix("TotemNesia")
         
         -- Refresh flyout icons now that spellbook is loaded
         TotemNesia.RefreshFlyoutIcons()
@@ -2869,6 +3001,22 @@ eventFrame:SetScript("OnEvent", function()
         -- Spellbook changed (learned new spell, respec, etc.) - refresh flyout icons
         TotemNesia.RefreshFlyoutIcons()
         TotemNesia.RefreshTotemSetIcons()
+    
+    elseif event == "CHAT_MSG_ADDON" then
+        -- Version checking via addon messages
+        local prefix, message, distribution, sender = arg1, arg2, arg3, arg4
+        if prefix == "TotemNesia" then
+            local versionStr = string.match(message, "VER:(%d+)")
+            if versionStr then
+                TotemNesia.CheckRemoteVersion(versionStr)
+            end
+        end
+    
+    elseif event == "PARTY_MEMBERS_CHANGED" or event == "RAID_ROSTER_UPDATE" then
+        -- Broadcast version when joining/leaving party/raid
+        if GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0 then
+            TotemNesia.BroadcastVersion()
+        end
     end
 end)
 
@@ -2969,7 +3117,7 @@ SlashCmdList["TOTEMNESIA"] = function(msg)
     end
 end
 
-DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v3.4.40 loaded. Type /tn for options.")
+DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v3.4.42 loaded. Type /tn for options.")
 
 -- Helper function for keybind macro (users create their own macro)
 function TotemNesia_RecallTotems()
