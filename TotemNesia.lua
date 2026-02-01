@@ -1,6 +1,6 @@
 -- TotemNesia: Automatically recalls totems after leaving combat
 -- For Turtle WoW (1.12)
--- Version 4.2
+-- Version 4.3
 
 -- ============================================================================
 -- CLASS CHECK AND INITIALIZATION
@@ -60,6 +60,10 @@ TotemNesia.updateNotified = false  -- Track if update notification has been show
 TotemNesia.manaCheckTimer = 0  -- Timer for checking mana periodically
 TotemNesia.manaAlertCooldown = 0  -- Cooldown timer to prevent spam
 TotemNesia.belowThreshold = false  -- Track if currently below threshold to detect crossing
+TotemNesia.potionAlertCooldown = 0  -- Cooldown timer for potion alert
+TotemNesia.belowPotionThreshold = false  -- Track if currently below potion threshold
+TotemNesia.publicManaAlertCooldown = 0  -- Cooldown timer for public mana alert
+TotemNesia.belowPublicManaThreshold = false  -- Track if currently below public mana threshold
 
 
 -- Check for nampower client mod
@@ -229,11 +233,23 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.hideWeaponSlot == nil then
         TotemNesiaDB.hideWeaponSlot = false
     end
+    if TotemNesiaDB.shiftToOpenFlyouts == nil then
+        TotemNesiaDB.shiftToOpenFlyouts = false  -- Default false = shift required
+    end
     if TotemNesiaDB.manaThreshold == nil then
         TotemNesiaDB.manaThreshold = 30  -- Default to 30%
     end
     if TotemNesiaDB.manaAudioMuted == nil then
         TotemNesiaDB.manaAudioMuted = false
+    end
+    if TotemNesiaDB.potionThreshold == nil then
+        TotemNesiaDB.potionThreshold = 30
+    end
+    if TotemNesiaDB.potionAudioMuted == nil then
+        TotemNesiaDB.potionAudioMuted = false
+    end
+    if TotemNesiaDB.publicManaMuted == nil then
+        TotemNesiaDB.publicManaMuted = false
     end
     
     -- Initialize totem sets (5 sets)
@@ -429,6 +445,22 @@ function GetTotemIcon(totemName)
         i = i + 1
     end
     return "Interface\\Icons\\Spell_Nature_Reincarnation"
+end
+
+-- Check if a totem/spell is learned
+function IsTotemLearned(totemName)
+    local i = 1
+    while true do
+        local spellName = GetSpellName(i, BOOKTYPE_SPELL)
+        if not spellName then
+            return false
+        end
+        if spellName == totemName then
+            return true
+        end
+        i = i + 1
+    end
+    return false
 end
 
 -- Totem duration table (base durations without Totemic Mastery talent)
@@ -777,16 +809,25 @@ for i, element in ipairs(elementOrder) do
     
     -- Populate flyout with totem icons in a single line
     local totems = TotemNesia.totemLists[element]
+    
+    -- Filter to only show learned totems
+    local learnedTotems = {}
+    for _, totemName in ipairs(totems) do
+        if IsTotemLearned(totemName) then
+            table.insert(learnedTotems, totemName)
+        end
+    end
+    
     local iconSize = 24
     local iconSpacing = 2
-    local numTotems = table.getn(totems)
+    local numTotems = table.getn(learnedTotems)
     
     -- Flyout will be resized dynamically based on direction
     -- For now, set it for horizontal (will be updated by UpdateTotemBarFlyouts)
     flyout:SetWidth((numTotems * iconSize) + ((numTotems + 1) * iconSpacing))
     flyout:SetHeight(iconSize + (2 * iconSpacing))
     
-    for j, totemName in ipairs(totems) do
+    for j, totemName in ipairs(learnedTotems) do
         local button = CreateFrame("Button", nil, flyout)
         button:SetWidth(iconSize)
         button:SetHeight(iconSize)
@@ -869,8 +910,25 @@ for i, element in ipairs(elementOrder) do
     
     -- Slot mouse events for flyout
     slot:SetScript("OnEnter", function()
-        this.flyout:Show()
-        this.flyout.hideTime = nil  -- Cancel any pending hide
+        -- Require shift key unless disabled in settings
+        if not TotemNesiaDB.shiftToOpenFlyouts and not IsShiftKeyDown() then
+            return
+        end
+        
+        -- Only show flyout if there are learned totems
+        local totems = TotemNesia.totemLists[this.element]
+        local hasLearnedTotems = false
+        for _, totemName in ipairs(totems) do
+            if IsTotemLearned(totemName) then
+                hasLearnedTotems = true
+                break
+            end
+        end
+        
+        if hasLearnedTotems then
+            this.flyout:Show()
+            this.flyout.hideTime = nil  -- Cancel any pending hide
+        end
     end)
     
     slot:SetScript("OnLeave", function()
@@ -1139,7 +1197,15 @@ function TotemNesia.UpdateTotemBarFlyouts()
         local flyout = slot.flyout
         if flyout then
             local totems = TotemNesia.totemLists[element]
-            local numTotems = table.getn(totems)
+            
+            -- Filter to only count learned totems
+            local learnedCount = 0
+            for _, totemName in ipairs(totems) do
+                if IsTotemLearned(totemName) then
+                    learnedCount = learnedCount + 1
+                end
+            end
+            local numTotems = learnedCount
             
             -- Get all child buttons
             local buttons = {}
@@ -1551,6 +1617,10 @@ local totemSetsContent = CreateFrame("Frame", nil, optionsMenu)
 totemSetsContent:SetAllPoints(optionsMenu)
 totemSetsContent:Hide()
 
+local manaContent = CreateFrame("Frame", nil, optionsMenu)
+manaContent:SetAllPoints(optionsMenu)
+manaContent:Hide()
+
 -- Create fireButtons table BEFORE tabs (so it exists when tabs reference it)
 local fireButtons = {}
 local earthButtons = {}
@@ -1667,27 +1737,52 @@ local totemSetsTabText = totemSetsTab:CreateFontString(nil, "OVERLAY", "GameFont
 totemSetsTabText:SetPoint("CENTER", 0, 2)
 totemSetsTabText:SetText("Totem Sets")
 
+local manaTab = CreateFrame("Button", nil, optionsMenu)
+manaTab:SetWidth(100)
+manaTab:SetHeight(32)
+manaTab:SetPoint("LEFT", totemSetsTab, "RIGHT", -15, 0)
+manaTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+manaTab:SetHighlightTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+
+local manaTabText = manaTab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+manaTabText:SetPoint("CENTER", 0, 2)
+manaTabText:SetText("Mana")
+
 -- Tab click handlers
 settingsTab:SetScript("OnClick", function()
     settingsContent:SetVerticalScroll(0); settingsScrollbar:SetValue(0)  -- Reset scroll to top
     settingsContent:Show()
     settingsScrollbar:Show()
     totemSetsContent:Hide()
+    manaContent:Hide()
     settingsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
     totemSetsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+    manaTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
 end)
 
 totemSetsTab:SetScript("OnClick", function()
     settingsContent:Hide()
     settingsScrollbar:Hide()
     totemSetsContent:Show()
+    manaContent:Hide()
     settingsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
     totemSetsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
+    manaTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
     -- Update all borders when tab is opened
     UpdateFireBorders()
     UpdateEarthBorders()
     UpdateWaterBorders()
     UpdateAirBorders()
+end)
+
+manaTab:SetScript("OnClick", function()
+    settingsContent:Hide()
+    settingsScrollbar:Hide()
+    totemSetsContent:Hide()
+    manaContent:Show()
+    settingsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+    totemSetsTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab")
+    manaTab:SetNormalTexture("Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab")
 end)
 
 -- TOTEM SETS TAB - Step 1: Instructions and Set Selector
@@ -2348,6 +2443,126 @@ a6:SetScript("OnClick",function() local set=TotemNesiaDB.currentTotemSet TotemNe
 -- NOTE: Don't call UpdateFireBorders() here - TotemNesiaDB isn't initialized yet!
 -- It will be called when buttons are clicked or tabs are switched
 
+-- MANA TAB CONTENT
+-- Mana tab title
+local manaTabTitle = manaContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+manaTabTitle:SetPoint("TOP", 0, -60)
+manaTabTitle:SetText("Mana Management")
+
+-- Mana tab description
+local manaTabDesc = manaContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+manaTabDesc:SetPoint("TOP", 0, -85)
+manaTabDesc:SetWidth(360)
+manaTabDesc:SetJustifyH("CENTER")
+manaTabDesc:SetText("Configure low mana alerts to help manage your mana pool during combat.")
+
+-- Mute mana audio queue checkbox (LEFT COLUMN)
+local muteManaCheckbox = CreateFrame("CheckButton", nil, manaContent, "UICheckButtonTemplate")
+muteManaCheckbox:SetPoint("TOPLEFT", 20, -110)
+muteManaCheckbox:SetWidth(24)
+muteManaCheckbox:SetHeight(24)
+local muteManaLabel = muteManaCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+muteManaLabel:SetPoint("LEFT", muteManaCheckbox, "RIGHT", 5, 0)
+muteManaLabel:SetText("Mute low mana alert")
+muteManaCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.manaAudioMuted = this:GetChecked() and true or false
+end)
+
+-- Potion Alert checkbox (LEFT COLUMN)
+local mutePotionCheckbox = CreateFrame("CheckButton", nil, manaContent, "UICheckButtonTemplate")
+mutePotionCheckbox:SetPoint("TOPLEFT", 20, -140)
+mutePotionCheckbox:SetWidth(24)
+mutePotionCheckbox:SetHeight(24)
+local mutePotionLabel = mutePotionCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+mutePotionLabel:SetPoint("LEFT", mutePotionCheckbox, "RIGHT", 5, 0)
+mutePotionLabel:SetText("Mute potion alert")
+mutePotionCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.potionAudioMuted = this:GetChecked() and true or false
+end)
+
+-- Mana Threshold label
+local manaThresholdLabel = manaContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+manaThresholdLabel:SetPoint("TOP", 0, -170)
+manaThresholdLabel:SetText("Low Mana Alert Threshold: 30%")
+
+-- Mana Threshold slider
+local manaThresholdSlider = CreateFrame("Slider", nil, manaContent)
+manaThresholdSlider:SetPoint("TOP", 0, -190)
+manaThresholdSlider:SetWidth(350)
+manaThresholdSlider:SetHeight(15)
+manaThresholdSlider:SetOrientation("HORIZONTAL")
+manaThresholdSlider:SetMinMaxValues(0, 100)
+manaThresholdSlider:SetValueStep(5)
+manaThresholdSlider:SetBackdrop({
+    bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+    tile = true,
+    tileSize = 8,
+    edgeSize = 8,
+    insets = { left = 3, right = 3, top = 6, bottom = 6 }
+})
+local manaThresholdThumb = manaThresholdSlider:CreateTexture(nil, "OVERLAY")
+manaThresholdThumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+manaThresholdThumb:SetWidth(32)
+manaThresholdThumb:SetHeight(32)
+manaThresholdSlider:SetThumbTexture(manaThresholdThumb)
+manaThresholdSlider:SetScript("OnValueChanged", function()
+    local value = math.floor(this:GetValue() / 5 + 0.5) * 5  -- Round to nearest 5%
+    TotemNesiaDB.manaThreshold = value
+    manaThresholdLabel:SetText("Low Mana Alert Threshold: " .. value .. "%")
+end)
+
+local potionThresholdLabel = manaContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+potionThresholdLabel:SetPoint("TOP", 0, -220)
+potionThresholdLabel:SetText("Potion Alert: 30%")
+
+local potionThresholdSlider = CreateFrame("Slider", nil, manaContent)
+potionThresholdSlider:SetPoint("TOP", 0, -240)
+potionThresholdSlider:SetWidth(350)
+potionThresholdSlider:SetHeight(15)
+potionThresholdSlider:SetOrientation("HORIZONTAL")
+potionThresholdSlider:SetMinMaxValues(0, 100)
+potionThresholdSlider:SetValueStep(5)
+potionThresholdSlider:SetValue(30)
+potionThresholdSlider:SetBackdrop({
+    bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
+    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
+    tile = true,
+    tileSize = 8,
+    edgeSize = 8,
+    insets = { left = 3, right = 3, top = 6, bottom = 6 }
+})
+local potionThresholdThumb = potionThresholdSlider:CreateTexture(nil, "OVERLAY")
+potionThresholdThumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
+potionThresholdThumb:SetWidth(32)
+potionThresholdThumb:SetHeight(32)
+potionThresholdSlider:SetThumbTexture(potionThresholdThumb)
+potionThresholdSlider:SetScript("OnValueChanged", function()
+    local value = math.floor(this:GetValue() / 5 + 0.5) * 5
+    TotemNesiaDB.potionThreshold = value
+    potionThresholdLabel:SetText("Potion Alert: " .. value .. "%")
+end)
+
+-- Public Mana Alert checkbox (RIGHT COLUMN)
+local mutePublicManaCheckbox = CreateFrame("CheckButton", nil, manaContent, "UICheckButtonTemplate")
+mutePublicManaCheckbox:SetPoint("TOPLEFT", 210, -110)
+mutePublicManaCheckbox:SetWidth(24)
+mutePublicManaCheckbox:SetHeight(24)
+local mutePublicManaLabel = mutePublicManaCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+mutePublicManaLabel:SetPoint("LEFT", mutePublicManaCheckbox, "RIGHT", 5, 0)
+mutePublicManaLabel:SetText("Disable public mana alert")
+mutePublicManaCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.publicManaMuted = this:GetChecked() and true or false
+end)
+
+-- Public Mana Alert Threshold label
+-- Mana explanation text
+local manaExplanation = manaContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+manaExplanation:SetPoint("TOP", 0, -280)
+manaExplanation:SetWidth(360)
+manaExplanation:SetJustifyH("LEFT")
+manaExplanation:SetText("The addon will play an audio alert when your mana drops below the threshold.\n\nThe alert has a 30-second cooldown to prevent spam and only triggers when crossing below the threshold (not while hovering).")
+
 -- LEFT COLUMN (now in settingsContent)
 -- Lock Recall Notification checkbox
 local lockCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
@@ -2356,7 +2571,7 @@ lockCheckbox:SetWidth(24)
 lockCheckbox:SetHeight(24)
 local lockLabel = lockCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 lockLabel:SetPoint("LEFT", lockCheckbox, "RIGHT", 5, 0)
-lockLabel:SetText("Lock Recall Notification")
+lockLabel:SetText("Lock recall notification")
 lockCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.isLocked = this:GetChecked() and true or false
     if TotemNesiaDB.isLocked then
@@ -2375,48 +2590,36 @@ end)
 
 -- Mute audio queue checkbox
 local muteCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-muteCheckbox:SetPoint("TOPLEFT", 20, -75)
+muteCheckbox:SetPoint("TOPLEFT", 20, -105)
 muteCheckbox:SetWidth(24)
 muteCheckbox:SetHeight(24)
 local muteLabel = muteCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 muteLabel:SetPoint("LEFT", muteCheckbox, "RIGHT", 5, 0)
-muteLabel:SetText("Mute audio queue")
+muteLabel:SetText("Mute recall audio queue")
 muteCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.audioEnabled = not this:GetChecked()
 end)
 
--- Mute mana audio queue checkbox
-local muteManaCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-muteManaCheckbox:SetPoint("TOPLEFT", 20, -165)
-muteManaCheckbox:SetWidth(24)
-muteManaCheckbox:SetHeight(24)
-local muteManaLabel = muteManaCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-muteManaLabel:SetPoint("LEFT", muteManaCheckbox, "RIGHT", 5, 0)
-muteManaLabel:SetText("Mute mana audio queue")
-muteManaCheckbox:SetScript("OnClick", function()
-    TotemNesiaDB.manaAudioMuted = this:GetChecked() and true or false
-end)
-
 -- Hide Recall Notification checkbox
 local hideUICheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-hideUICheckbox:SetPoint("TOPLEFT", 20, -105)
+hideUICheckbox:SetPoint("TOPLEFT", 20, -75)
 hideUICheckbox:SetWidth(24)
 hideUICheckbox:SetHeight(24)
 local hideUILabel = hideUICheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 hideUILabel:SetPoint("LEFT", hideUICheckbox, "RIGHT", 5, 0)
-hideUILabel:SetText("Hide Recall Notification")
+hideUILabel:SetText("Hide recall notification")
 hideUICheckbox:SetScript("OnClick", function()
     TotemNesiaDB.hideUIElement = this:GetChecked() and true or false
 end)
 
 -- Enable Totem Bar checkbox
 local enableTotemBarCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-enableTotemBarCheckbox:SetPoint("TOPLEFT", 20, -135)
+enableTotemBarCheckbox:SetPoint("TOPLEFT", 210, -45)
 enableTotemBarCheckbox:SetWidth(24)
 enableTotemBarCheckbox:SetHeight(24)
 local enableTotemBarLabel = enableTotemBarCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 enableTotemBarLabel:SetPoint("LEFT", enableTotemBarCheckbox, "RIGHT", 5, 0)
-enableTotemBarLabel:SetText("Enable Totem Bar")
+enableTotemBarLabel:SetText("Enable totem bar")
 enableTotemBarCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.totemBarEnabled = this:GetChecked() and true or false
     TotemNesia.UpdateTotemBar()
@@ -2425,12 +2628,12 @@ end)
 -- RIGHT COLUMN
 -- Lock Totem Tracker checkbox
 local lockTotemBarCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-lockTotemBarCheckbox:SetPoint("TOPLEFT", 210, -45)
+lockTotemBarCheckbox:SetPoint("TOPLEFT", 20, -135)
 lockTotemBarCheckbox:SetWidth(24)
 lockTotemBarCheckbox:SetHeight(24)
 local lockTotemBarLabel = lockTotemBarCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 lockTotemBarLabel:SetPoint("LEFT", lockTotemBarCheckbox, "RIGHT", 5, 0)
-lockTotemBarLabel:SetText("Lock Totem Tracker")
+lockTotemBarLabel:SetText("Lock totem tracker")
 lockTotemBarCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.totemTrackerLocked = this:GetChecked() and true or false
     if TotemNesiaDB.totemTrackerLocked then
@@ -2442,12 +2645,12 @@ end)
 
 -- Hide Totem Tracker checkbox
 local hideTotemBarCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-hideTotemBarCheckbox:SetPoint("TOPLEFT", 210, -75)
+hideTotemBarCheckbox:SetPoint("TOPLEFT", 20, -165)
 hideTotemBarCheckbox:SetWidth(24)
 hideTotemBarCheckbox:SetHeight(24)
 local hideTotemBarLabel = hideTotemBarCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 hideTotemBarLabel:SetPoint("LEFT", hideTotemBarCheckbox, "RIGHT", 5, 0)
-hideTotemBarLabel:SetText("Hide Totem Tracker")
+hideTotemBarLabel:SetText("Hide totem tracker")
 hideTotemBarCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.totemTrackerHidden = this:GetChecked() and true or false
     TotemNesia.UpdateTotemTracker()
@@ -2455,12 +2658,12 @@ end)
 
 -- Lock Totem Bar checkbox
 local lockTotemBarCastCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-lockTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -105)
+lockTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -75)
 lockTotemBarCastCheckbox:SetWidth(24)
 lockTotemBarCastCheckbox:SetHeight(24)
 local lockTotemBarCastLabel = lockTotemBarCastCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 lockTotemBarCastLabel:SetPoint("LEFT", lockTotemBarCastCheckbox, "RIGHT", 5, 0)
-lockTotemBarCastLabel:SetText("Lock Totem Bar")
+lockTotemBarCastLabel:SetText("Lock totem bar")
 lockTotemBarCastCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.totemBarLocked = this:GetChecked() and true or false
     if TotemNesiaDB.totemBarLocked then
@@ -2470,27 +2673,26 @@ lockTotemBarCastCheckbox:SetScript("OnClick", function()
     end
 end)
 
--- Hide Totem Bar checkbox
-local hideTotemBarCastCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-hideTotemBarCastCheckbox:SetPoint("TOPLEFT", 210, -135)
-hideTotemBarCastCheckbox:SetWidth(24)
-hideTotemBarCastCheckbox:SetHeight(24)
-local hideTotemBarCastLabel = hideTotemBarCastCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-hideTotemBarCastLabel:SetPoint("LEFT", hideTotemBarCastCheckbox, "RIGHT", 5, 0)
-hideTotemBarCastLabel:SetText("Hide Totem Bar")
-hideTotemBarCastCheckbox:SetScript("OnClick", function()
-    TotemNesiaDB.totemBarHidden = this:GetChecked() and true or false
-    TotemNesia.UpdateTotemBar()
+-- Shift to Open Flyouts checkbox (non-functional placeholder)
+local shiftToOpenFlyoutsCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
+shiftToOpenFlyoutsCheckbox:SetPoint("TOPLEFT", 210, -105)
+shiftToOpenFlyoutsCheckbox:SetWidth(24)
+shiftToOpenFlyoutsCheckbox:SetHeight(24)
+local shiftToOpenFlyoutsLabel = shiftToOpenFlyoutsCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+shiftToOpenFlyoutsLabel:SetPoint("LEFT", shiftToOpenFlyoutsCheckbox, "RIGHT", 5, 0)
+shiftToOpenFlyoutsLabel:SetText("Disable shift for flyouts")
+shiftToOpenFlyoutsCheckbox:SetScript("OnClick", function()
+    TotemNesiaDB.shiftToOpenFlyouts = this:GetChecked() and true or false
 end)
 
 -- Hide Weapon Enchant Slot checkbox
 local hideWeaponSlotCheckbox = CreateFrame("CheckButton", nil, settingsScrollChild, "UICheckButtonTemplate")
-hideWeaponSlotCheckbox:SetPoint("TOPLEFT", 210, -165)  -- Fixed from -160 to -165 for consistent 30px spacing
+hideWeaponSlotCheckbox:SetPoint("TOPLEFT", 210, -135)
 hideWeaponSlotCheckbox:SetWidth(24)
 hideWeaponSlotCheckbox:SetHeight(24)
 local hideWeaponSlotLabel = hideWeaponSlotCheckbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 hideWeaponSlotLabel:SetPoint("LEFT", hideWeaponSlotCheckbox, "RIGHT", 5, 0)
-hideWeaponSlotLabel:SetText("Hide Weapon Enchant Slot")
+hideWeaponSlotLabel:SetText("Hide weapon enchant slot")
 hideWeaponSlotCheckbox:SetScript("OnClick", function()
     TotemNesiaDB.hideWeaponSlot = this:GetChecked() and true or false
     TotemNesia.UpdateTotemBar()
@@ -2748,38 +2950,6 @@ barScaleSlider:SetScript("OnValueChanged", function()
     totemBar:SetScale(value)
 end)
 
--- Mana Threshold label
-local manaThresholdLabel = settingsScrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-manaThresholdLabel:SetPoint("TOP", 0, -465)
-manaThresholdLabel:SetText("Low Mana Alert: 30%")
-
--- Mana Threshold slider
-local manaThresholdSlider = CreateFrame("Slider", nil, settingsScrollChild)
-manaThresholdSlider:SetPoint("TOP", 0, -485)
-manaThresholdSlider:SetWidth(350)
-manaThresholdSlider:SetHeight(15)
-manaThresholdSlider:SetOrientation("HORIZONTAL")
-manaThresholdSlider:SetMinMaxValues(0, 100)
-manaThresholdSlider:SetValueStep(5)
-manaThresholdSlider:SetBackdrop({
-    bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
-    edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
-    tile = true,
-    tileSize = 8,
-    edgeSize = 8,
-    insets = { left = 3, right = 3, top = 6, bottom = 6 }
-})
-local manaThresholdThumb = manaThresholdSlider:CreateTexture(nil, "OVERLAY")
-manaThresholdThumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-manaThresholdThumb:SetWidth(32)
-manaThresholdThumb:SetHeight(32)
-manaThresholdSlider:SetThumbTexture(manaThresholdThumb)
-manaThresholdSlider:SetScript("OnValueChanged", function()
-    local value = math.floor(this:GetValue() / 5 + 0.5) * 5  -- Round to nearest 5%
-    TotemNesiaDB.manaThreshold = value
-    manaThresholdLabel:SetText("Low Mana Alert: " .. value .. "%")
-end)
-
 -- Keybind macros section
 local keybindTitle = settingsScrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 keybindTitle:SetPoint("TOP", 0, -530)
@@ -2865,13 +3035,15 @@ minimapButton:SetScript("OnClick", function()
         lockCheckbox:SetChecked(TotemNesiaDB.isLocked)
         muteCheckbox:SetChecked(not TotemNesiaDB.audioEnabled)
         muteManaCheckbox:SetChecked(TotemNesiaDB.manaAudioMuted)
+        mutePotionCheckbox:SetChecked(TotemNesiaDB.potionAudioMuted)
+        -- test comment
         hideUICheckbox:SetChecked(TotemNesiaDB.hideUIElement)
         enableTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarEnabled)
         lockTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerLocked)
         hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerHidden)
         lockTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
-        hideTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
         hideWeaponSlotCheckbox:SetChecked(TotemNesiaDB.hideWeaponSlot)
+        shiftToOpenFlyoutsCheckbox:SetChecked(TotemNesiaDB.shiftToOpenFlyouts)
         debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
         soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
         partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
@@ -2890,6 +3062,8 @@ minimapButton:SetScript("OnClick", function()
         
         manaThresholdSlider:SetValue(TotemNesiaDB.manaThreshold)
         manaThresholdLabel:SetText("Low Mana Alert: " .. TotemNesiaDB.manaThreshold .. "%")
+        potionThresholdSlider:SetValue(TotemNesiaDB.potionThreshold)
+        potionThresholdLabel:SetText("Potion Alert: " .. TotemNesiaDB.potionThreshold .. "%")
         timerLabel:SetText("Display Duration: " .. TotemNesiaDB.timerDuration .. "s")
         layoutButton:SetText(TotemNesiaDB.totemBarLayout or "Horizontal")
         flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection or "Up")
@@ -3322,125 +3496,62 @@ timerFrame:SetScript("OnUpdate", function()
                 end
             end
         end
+        
+        -- Potion alert logic (hardcoded 80% threshold)
+        -- Update potion alert cooldown timer
+        if TotemNesia.potionAlertCooldown > 0 then
+            TotemNesia.potionAlertCooldown = TotemNesia.potionAlertCooldown - 1.0
+        end
+        
+        -- Check for potion alert at 80% mana
+        local currentMana = UnitMana("player")
+        local maxMana = UnitManaMax("player")
+        
+        if maxMana > 0 then
+            local manaPercent = (currentMana / maxMana) * 100
+            
+            -- Check if we just dropped below 80%
+            if manaPercent < 80 and not TotemNesia.belowPotionThreshold then
+                TotemNesia.belowPotionThreshold = true
+                
+                -- Play audio if not muted and cooldown is done
+                if not TotemNesiaDB.potionAudioMuted and TotemNesia.potionAlertCooldown <= 0 then
+                    PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Use_a_potion.wav")
+                    TotemNesia.potionAlertCooldown = 30
+                    TotemNesia.DebugPrint("Potion alert played: " .. math.floor(manaPercent) .. "%")
+                end
+            elseif manaPercent >= 80 and TotemNesia.belowPotionThreshold then
+                -- Reset flag when we go back above 80%
+                TotemNesia.belowPotionThreshold = false
+                TotemNesia.DebugPrint("Mana restored above potion threshold")
+            end
+            
+            -- Public mana alert logic (hard-coded 15% threshold)
+            -- Update public mana alert cooldown timer
+            if TotemNesia.publicManaAlertCooldown > 0 then
+                TotemNesia.publicManaAlertCooldown = TotemNesia.publicManaAlertCooldown - 1.0
+            end
+            
+            -- Check if we just dropped below 15%
+            if manaPercent < 15 and not TotemNesia.belowPublicManaThreshold then
+                TotemNesia.belowPublicManaThreshold = true
+                
+                -- Send chat message if not muted and cooldown is done
+                if not TotemNesiaDB.publicManaMuted and TotemNesia.publicManaAlertCooldown <= 0 then
+                    SendChatMessage("I am low on mana, I need to drink.", "SAY")
+                    TotemNesia.publicManaAlertCooldown = 30
+                    TotemNesia.DebugPrint("Public mana alert sent: 15%")
+                end
+            elseif manaPercent >= 15 and TotemNesia.belowPublicManaThreshold then
+                -- Reset flag when we go back above 15%
+                TotemNesia.belowPublicManaThreshold = false
+                TotemNesia.DebugPrint("Mana restored above public mana threshold")
+            end
+        end
     end
 end)
 
--- Slash commands
-SLASH_TOTEMNESIA1 = "/tn"
-SlashCmdList["TOTEMNESIA"] = function(msg)
-    local lowerMsg = string.lower(msg)
-    
-    -- Undocumented test command
-    if lowerMsg == "test" then
-        TotemNesia.hasTotems = true
-        TotemNesia.displayTimer = TotemNesiaDB.timerDuration
-        iconFrame:Show()
-        if TotemNesiaDB.audioEnabled then
-            PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Pick_up_your_totems.wav")
-        end
-        return
-    end
-    
-    -- Test audio command
-    if lowerMsg == "testaudio" then
-        PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Pick_up_your_totems.wav")
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Playing audio file 'Pick_up_your_totems.wav'")
-        return
-    end
-    
-    -- Force refresh all totem tracker icons (fix for blank icons bug)
-    if lowerMsg == "refreshicons" or lowerMsg == "refresh" then
-        TotemNesia.RefreshTotemSetIcons()
-        TotemNesia.UpdateTotemTracker()
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Refreshed all totem icons")
-        return
-    end
-    
-    -- Test highest rank detection (debug command)
-    if lowerMsg == "testranks" then
-        local testTotems = {
-            "Searing Totem",
-            "Healing Stream Totem",
-            "Strength of Earth Totem",
-            "Windfury Totem",
-            "Mana Spring Totem"
-        }
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Testing rank detection...")
-        for _, totemName in ipairs(testTotems) do
-            local highestId = GetHighestLearnedRank(totemName)
-            if highestId then
-                local spellName, spellRank = GetSpellName(highestId, BOOKTYPE_SPELL)
-                local rankText = spellRank or "Rank 1"
-                DEFAULT_CHAT_FRAME:AddMessage("  " .. totemName .. " -> " .. spellName .. " (" .. rankText .. ") [ID: " .. highestId .. "]")
-            else
-                DEFAULT_CHAT_FRAME:AddMessage("  " .. totemName .. " -> NOT FOUND")
-            end
-        end
-        return
-    end
-    
-    -- Scan spellbook for all totems (debug command)
-    if lowerMsg == "scanbook" then
-        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Scanning spellbook for totems...")
-        local count = 0
-        for i = 1, 200 do
-            local spellName, spellRank = GetSpellName(i, BOOKTYPE_SPELL)
-            if not spellName then
-                break
-            end
-            -- Look for "Totem" in the name
-            if string.find(spellName, "Totem") then
-                local rankText = spellRank or "no rank"
-                DEFAULT_CHAT_FRAME:AddMessage("  [" .. i .. "] " .. spellName .. " (" .. rankText .. ")")
-                count = count + 1
-            end
-        end
-        DEFAULT_CHAT_FRAME:AddMessage("Found " .. count .. " totems in spellbook")
-        return
-    end
-    
-    -- Toggle options menu
-    if optionsMenu:IsVisible() then
-        optionsMenu:Hide()
-    else
-        -- Update checkbox states when opening
-        lockCheckbox:SetChecked(TotemNesiaDB.isLocked)
-        muteManaCheckbox:SetChecked(TotemNesiaDB.manaAudioMuted)
-        muteCheckbox:SetChecked(not TotemNesiaDB.audioEnabled)
-        hideUICheckbox:SetChecked(TotemNesiaDB.hideUIElement)
-        enableTotemBarCheckbox:SetChecked(TotemNesiaDB.totemBarEnabled)
-        lockTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerLocked)
-        hideTotemBarCheckbox:SetChecked(TotemNesiaDB.totemTrackerHidden)
-        lockTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarLocked)
-        hideTotemBarCastCheckbox:SetChecked(TotemNesiaDB.totemBarHidden)
-        hideWeaponSlotCheckbox:SetChecked(TotemNesiaDB.hideWeaponSlot)
-        debugCheckbox:SetChecked(TotemNesiaDB.debugMode)
-        soloCheckbox:SetChecked(TotemNesiaDB.enabledSolo)
-        partyCheckbox:SetChecked(TotemNesiaDB.enabledParty)
-        raidCheckbox:SetChecked(TotemNesiaDB.enabledRaid)
-        
-        timerSlider:SetValue(TotemNesiaDB.timerDuration)
-        
-        uiScaleSlider:SetValue(TotemNesiaDB.uiFrameScale)
-        uiScaleLabel:SetText("Recall Notification Scale: " .. TotemNesiaDB.uiFrameScale)
-        
-        trackerScaleSlider:SetValue(TotemNesiaDB.totemTrackerScale)
-        trackerScaleLabel:SetText("Totem Tracker Scale: " .. TotemNesiaDB.totemTrackerScale)
-        
-        barScaleSlider:SetValue(TotemNesiaDB.totemBarScale)
-        barScaleLabel:SetText("Totem Bar Scale: " .. TotemNesiaDB.totemBarScale)
-        
-        manaThresholdSlider:SetValue(TotemNesiaDB.manaThreshold)
-        manaThresholdLabel:SetText("Low Mana Alert: " .. TotemNesiaDB.manaThreshold .. "%")
-        timerLabel:SetText("Display Duration: " .. TotemNesiaDB.timerDuration .. "s")
-        layoutButton:SetText(TotemNesiaDB.totemBarLayout or "Horizontal")
-        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection or "Up")
-        settingsContent:SetVerticalScroll(0); settingsScrollbar:SetValue(0)  -- Reset scroll to top
-        optionsMenu:Show()
-    end
-end
-
-DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v3.4.71 loaded. Type /tn for options.")
+DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v3.4.148 loaded. Click minimap button for options.")
 
 -- Helper function for keybind macro (users create their own macro)
 function TotemNesia_RecallTotems()
