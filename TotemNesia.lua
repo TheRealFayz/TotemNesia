@@ -810,24 +810,18 @@ for i, element in ipairs(elementOrder) do
     -- Populate flyout with totem icons in a single line
     local totems = TotemNesia.totemLists[element]
     
-    -- Filter to only show learned totems
-    local learnedTotems = {}
-    for _, totemName in ipairs(totems) do
-        if IsTotemLearned(totemName) then
-            table.insert(learnedTotems, totemName)
-        end
-    end
+    -- Create buttons for ALL totems (will hide unlearned ones later)
+    local numTotems = table.getn(totems)
     
     local iconSize = 24
     local iconSpacing = 2
-    local numTotems = table.getn(learnedTotems)
     
     -- Flyout will be resized dynamically based on direction
     -- For now, set it for horizontal (will be updated by UpdateTotemBarFlyouts)
     flyout:SetWidth((numTotems * iconSize) + ((numTotems + 1) * iconSpacing))
     flyout:SetHeight(iconSize + (2 * iconSpacing))
     
-    for j, totemName in ipairs(learnedTotems) do
+    for j, totemName in ipairs(totems) do
         local button = CreateFrame("Button", nil, flyout)
         button:SetWidth(iconSize)
         button:SetHeight(iconSize)
@@ -915,17 +909,17 @@ for i, element in ipairs(elementOrder) do
             return
         end
         
-        -- Only show flyout if there are learned totems
-        local totems = TotemNesia.totemLists[this.element]
-        local hasLearnedTotems = false
-        for _, totemName in ipairs(totems) do
-            if IsTotemLearned(totemName) then
-                hasLearnedTotems = true
+        -- Only show flyout if there are visible (learned) totems
+        local children = {this.flyout:GetChildren()}
+        local hasVisibleButtons = false
+        for _, child in ipairs(children) do
+            if child:IsShown() then
+                hasVisibleButtons = true
                 break
             end
         end
         
-        if hasLearnedTotems then
+        if hasVisibleButtons then
             this.flyout:Show()
             this.flyout.hideTime = nil  -- Cancel any pending hide
         end
@@ -1280,15 +1274,52 @@ TotemNesia.totemTrackerIcons = {}
 
 -- Function to refresh flyout menu icons (called after login to ensure spellbook is loaded)
 function TotemNesia.RefreshFlyoutIcons()
+    local iconSize = 24
+    local iconSpacing = 2
+    local direction = TotemNesiaDB.totemBarFlyoutDirection or "Up"
+    
     for element, slot in pairs(TotemNesia.totemBarSlots) do
         if slot.flyout then
             -- Get all child buttons from the flyout
             local children = {slot.flyout:GetChildren()}
+            local visibleButtons = {}
+            
             for _, child in ipairs(children) do
                 if child.totemName and child.iconTexture then
                     -- Refresh the icon texture from spellbook
                     local iconPath = GetTotemIcon(child.totemName)
                     child.iconTexture:SetTexture(iconPath)
+                    
+                    -- Hide button if totem is not learned, show if learned
+                    if IsTotemLearned(child.totemName) then
+                        child:Show()
+                        table.insert(visibleButtons, child)
+                    else
+                        child:Hide()
+                    end
+                end
+            end
+            
+            local visibleCount = table.getn(visibleButtons)
+            
+            -- Reposition only visible buttons based on direction
+            if direction == "Up" or direction == "Down" then
+                -- Vertical layout
+                slot.flyout:SetWidth(iconSize + (2 * iconSpacing))
+                slot.flyout:SetHeight((visibleCount * iconSize) + ((visibleCount + 1) * iconSpacing))
+                
+                for i, button in ipairs(visibleButtons) do
+                    button:ClearAllPoints()
+                    button:SetPoint("TOP", slot.flyout, "TOP", 0, -(iconSpacing + ((i - 1) * (iconSize + iconSpacing))))
+                end
+            else
+                -- Horizontal layout (Left or Right)
+                slot.flyout:SetWidth((visibleCount * iconSize) + ((visibleCount + 1) * iconSpacing))
+                slot.flyout:SetHeight(iconSize + (2 * iconSpacing))
+                
+                for i, button in ipairs(visibleButtons) do
+                    button:ClearAllPoints()
+                    button:SetPoint("LEFT", slot.flyout, "LEFT", iconSpacing + ((i - 1) * (iconSize + iconSpacing)), 0)
                 end
             end
         end
@@ -3551,7 +3582,7 @@ timerFrame:SetScript("OnUpdate", function()
     end
 end)
 
-DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v3.4.148 loaded. Click minimap button for options.")
+DEFAULT_CHAT_FRAME:AddMessage("TotemNesia v4.3.2 loaded. Click minimap button for options.")
 
 -- Helper function for keybind macro (users create their own macro)
 function TotemNesia_RecallTotems()
