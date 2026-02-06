@@ -29,6 +29,10 @@ BINDING_NAME_TOTEM_SET_2 = "Totem Set 2"
 BINDING_NAME_TOTEM_SET_3 = "Totem Set 3"
 BINDING_NAME_TOTEM_SET_4 = "Totem Set 4"
 BINDING_NAME_TOTEM_SET_5 = "Totem Set 5"
+BINDING_NAME_TOTEM_BAR_1 = "Totem Bar 1 (Fire)"
+BINDING_NAME_TOTEM_BAR_2 = "Totem Bar 2 (Earth)"
+BINDING_NAME_TOTEM_BAR_3 = "Totem Bar 3 (Water)"
+BINDING_NAME_TOTEM_BAR_4 = "Totem Bar 4 (Air)"
 
 -- ============================================================================
 -- CONSTANTS
@@ -781,6 +785,14 @@ for i, element in ipairs(elementOrder) do
     timerText:SetTextColor(1, 1, 1)
     slot.timerText = timerText
     
+    -- Keybind text (top-right corner like action buttons)
+    local keybindText = slot:CreateFontString(nil, "OVERLAY")
+    keybindText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    keybindText:SetPoint("TOPRIGHT", slot, "TOPRIGHT", -1, -1)
+    keybindText:SetTextColor(0.6, 0.6, 0.6, 1)  -- Gray color like action buttons
+    keybindText:SetJustifyH("RIGHT")
+    slot.keybindText = keybindText
+    
     -- Element identifier
     slot.element = element
     
@@ -1037,6 +1049,52 @@ function TotemNesia.CanUseTotemicRecall()
     end
     
     return false
+end
+
+-- Function to update keybind displays on all totem bar slots
+function TotemNesia.UpdateTotemBarKeybinds()
+    if not TotemNesia.totemBarSlots then
+        return
+    end
+    
+    -- Map element names to their binding display names (must match Bindings.xml exactly)
+    local bindingMap = {
+        fire = "Totem Bar 1 (Fire)",
+        earth = "Totem Bar 2 (Earth)",
+        water = "Totem Bar 3 (Water)",
+        air = "Totem Bar 4 (Air)"
+    }
+    
+    -- Update each slot's keybind display (skip weapon slot)
+    for element, bindingName in pairs(bindingMap) do
+        local slot = TotemNesia.totemBarSlots[element]
+        if slot and slot.keybindText then
+            -- Get the first key bound to this action (using exact display name from Bindings.xml)
+            local key1, key2 = GetBindingKey(bindingName)
+            local keyText = ""
+            
+            if key1 then
+                -- Format the key for display
+                keyText = key1
+                keyText = string.gsub(keyText, "SHIFT%-", "S")
+                keyText = string.gsub(keyText, "CTRL%-", "C")
+                keyText = string.gsub(keyText, "ALT%-", "A")
+                keyText = string.gsub(keyText, "BUTTON", "M")
+                
+                -- Debug: Print what we found (only if debug mode is explicitly enabled)
+                if TotemNesiaDB and TotemNesiaDB.debugMode == true then
+                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: " .. element .. " keybind = " .. keyText)
+                end
+            else
+                -- Debug: No binding found (only if debug mode is explicitly enabled)
+                if TotemNesiaDB and TotemNesiaDB.debugMode == true then
+                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: No keybind found for " .. element)
+                end
+            end
+            
+            slot.keybindText:SetText(keyText)
+        end
+    end
 end
 
 -- Function to update Totem Bar display and timers
@@ -3328,6 +3386,7 @@ eventFrame:RegisterEvent("SPELLS_CHANGED")  -- Fires when player learns new spel
 eventFrame:RegisterEvent("CHAT_MSG_ADDON")  -- For version checking
 eventFrame:RegisterEvent("PARTY_MEMBERS_CHANGED")  -- For broadcasting version on party join
 eventFrame:RegisterEvent("RAID_ROSTER_UPDATE")  -- For broadcasting version on raid join
+eventFrame:RegisterEvent("UPDATE_BINDINGS")  -- Fires when keybindings change
 
 eventFrame:SetScript("OnEvent", function()
     if event == "PLAYER_LOGIN" then
@@ -3337,6 +3396,7 @@ eventFrame:SetScript("OnEvent", function()
         TotemNesia.UpdateTotemTracker()
         TotemNesia.UpdateTotemBar()
         TotemNesia.UpdateTotemBarFlyouts()
+        TotemNesia.UpdateTotemBarKeybinds()  -- Update keybind displays
         
         -- Refresh flyout icons now that spellbook is loaded
         TotemNesia.RefreshFlyoutIcons()
@@ -3442,6 +3502,10 @@ eventFrame:SetScript("OnEvent", function()
         if GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0 then
             TotemNesia.BroadcastVersion()
         end
+    
+    elseif event == "UPDATE_BINDINGS" then
+        -- Update keybind displays when bindings change
+        TotemNesia.UpdateTotemBarKeybinds()
     end
 end)
 
@@ -3706,4 +3770,49 @@ function TotemNesia_CastNextTotem(setNumber)
     end
     
     TotemNesia.CastNextTotem(setNumber)
+end
+
+-- Helper functions for Totem Bar slot keybinds
+function TotemNesia_CastTotemBar1()
+    if not IsShaman() then
+        return
+    end
+    
+    local slot = TotemNesia.totemBarSlots["fire"]
+    if slot and slot.selectedTotem then
+        CastSpellByName(slot.selectedTotem)
+    end
+end
+
+function TotemNesia_CastTotemBar2()
+    if not IsShaman() then
+        return
+    end
+    
+    local slot = TotemNesia.totemBarSlots["earth"]
+    if slot and slot.selectedTotem then
+        CastSpellByName(slot.selectedTotem)
+    end
+end
+
+function TotemNesia_CastTotemBar3()
+    if not IsShaman() then
+        return
+    end
+    
+    local slot = TotemNesia.totemBarSlots["water"]
+    if slot and slot.selectedTotem then
+        CastSpellByName(slot.selectedTotem)
+    end
+end
+
+function TotemNesia_CastTotemBar4()
+    if not IsShaman() then
+        return
+    end
+    
+    local slot = TotemNesia.totemBarSlots["air"]
+    if slot and slot.selectedTotem then
+        CastSpellByName(slot.selectedTotem)
+    end
 end
