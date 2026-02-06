@@ -689,7 +689,7 @@ TotemNesia.totemLists = {
     water = {
         "Healing Stream Totem",
         "Mana Spring Totem",
-        "Frost Resistance Totem",
+        "Fire Resistance Totem",
         "Disease Cleansing Totem",
         "Poison Cleansing Totem"
         -- Mana Tide Totem removed (doesn't exist on Turtle WoW)
