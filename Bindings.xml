@@ -14,4 +14,16 @@
 	<Binding name="Totem Set 5">
 		TotemNesia_CastNextTotem(5)
 	</Binding>
+	<Binding name="Totem Bar 1 (Fire)">
+		TotemNesia_CastTotemBar1()
+	</Binding>
+	<Binding name="Totem Bar 2 (Earth)">
+		TotemNesia_CastTotemBar2()
+	</Binding>
+	<Binding name="Totem Bar 3 (Water)">
+		TotemNesia_CastTotemBar3()
+	</Binding>
+	<Binding name="Totem Bar 4 (Air)">
+		TotemNesia_CastTotemBar4()
+	</Binding>
 </Bindings>
