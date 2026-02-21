@@ -1592,7 +1592,7 @@ table.insert(UISpecialFrames, "TotemNesiaOptionsMenu")
 -- Options menu title
 local menuTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 menuTitle:SetPoint("TOP", 0, -15)
-menuTitle:SetText("TotemNesia V3.0")
+menuTitle:SetText("TotemNesia V1.17")
 menuTitle:SetTextColor(1, 0.82, 0, 1)  -- Yellow color
 
 -- Author credit (smaller text below title)
