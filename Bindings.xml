@@ -26,4 +26,7 @@
 	<Binding name="Totem Bar 4 (Air)">
 		TotemNesia_CastTotemBar4()
 	</Binding>
+	<Binding name="Recast Shield">
+		TotemNesia_CastShield()
+	</Binding>
 </Bindings>
