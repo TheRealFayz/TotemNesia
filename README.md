@@ -1,8 +1,28 @@
 # TotemNesia
 
-**A comprehensive totem management addon for Shaman in Turtle WoW**
+**A comprehensive totem management addon for Shaman in OctoWoW**
 
 TotemNesia helps Shamans efficiently manage their totems by providing visual feedback, quick-cast functionality, and a clickable notification to recall totems after leaving combat. The addon intelligently tracks all your active totems with a dynamic tracker bar, provides instant access to your favorite totems through a quick-cast bar, and monitors your distance from placed totems. **Never be that Shaman that causes an accidental totem pull again.**
+
+## What's New in 2.0
+
+Version 2.0 is a big rewrite of how the addon is put together. The old single `TotemNesia.lua` file is now split into separate files by feature, which makes the addon much easier to maintain and fix going forward.
+
+- `Core.lua` - shared setup, saved settings, and helpers
+- `Recall.lua` - recall notification and totem distance checks
+- `TotemBar.lua` - totem bar, flyouts, shield and weapon slots
+- `Options.lua` - settings window and minimap button
+- `Mana.lua` - mana alerts
+- `Casting.lua` - keybind and macro casting
+- `Events.lua` - game event handling
+
+Other changes in 2.0:
+- Totem bar slots with no assigned totem now show the icon of the totem you have out for that element, and clear it when the totem is gone
+- Weapon enchants can be assigned to the weapon slot with Ctrl-click, the same way totems are
+- Clicking the weapon slot casts your assigned enchant
+- When your weapon has no enchant, the weapon slot shows your assigned enchant greyed out as a reminder
+
+**Upgrading from 1.x:** delete your old `TotemNesia` folder before installing 2.0. The old `TotemNesia.lua` is no longer used. Your settings carry over.
 
 ## Features
 
@@ -21,6 +41,9 @@ TotemNesia helps Shamans efficiently manage their totems by providing visual fee
 - **Automatic icon display** - Shows your currently active weapon enchant
 - **Flyout menu** - Access all weapon enchants (Rockbiter, Flametongue, Frostbrand, Windfury)
 - **Click-to-cast** - Click enchants in the flyout to apply them
+- **Ctrl-click assignment** - Ctrl-click an enchant in the flyout to make it the slot's enchant (saved between sessions)
+- **One-click reapply** - Click the weapon slot to cast your assigned enchant
+- **Missing enchant reminder** - With no enchant on your weapon, the slot shows your assigned enchant greyed out
 - **Duration timer** - Countdown in minutes (30m, 1m) or seconds (59, 30, 1) when under 1 minute
 - **Hide option** - Optional checkbox to hide this slot if not needed
 
@@ -87,7 +110,7 @@ Vanilla WoW (1.12) has API restrictions that prevent addons from automatically c
 - Helping keep Shamans from forgetting their totems and causing accidental pulls
 
 ### Weapon Enchant Detection
-The weapon enchant system uses `GetWeaponEnchantInfo()` API to detect active enchants and their expiration times. Because weapon enchants don't show as scannable buffs in Vanilla WoW, the addon tracks which enchant you clicked in the flyout menu and displays that icon while the timer is active. If you reload or login with an existing enchant, the timer will work but the icon won't appear until you apply a fresh enchant from the flyout.
+The weapon enchant system uses the `GetWeaponEnchantInfo()` API to detect active enchants and their expiration times. Because weapon enchants don't show as scannable buffs in Vanilla WoW, the addon reads the enchant name from your main hand weapon's tooltip to work out which one is active. That means the correct icon shows up even after a reload or login. If the tooltip can't be read, it falls back to the last enchant you cast from the flyout or the weapon slot.
 
 ### Sequential Totem Casting (v4.0+)
 The sequential casting feature respects Vanilla WoW's "one spell per keypress" limitation. Each keypress casts one totem in order (Fire → Earth → Water → Air). The addon tracks which totem is next and automatically resets to Fire after 5 seconds of inactivity. This feature requires the `Bindings.xml` file to be present for keybind registration.
@@ -101,7 +124,7 @@ Found a bug or have a feature request? Please submit an issue on the GitHub repo
 
 ## License
 
-This addon is provided as-is for use with Turtle WoW.  If you wish to make edits or forks to the code, please feel free to reach out. 
+This addon is provided as-is for use with OctoWoW.  If you wish to make edits or forks to the code, please feel free to reach out. 
 
 ## Credits
 
