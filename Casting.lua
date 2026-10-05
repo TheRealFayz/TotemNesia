@@ -49,19 +49,19 @@ function TotemNesia.CastNextTotem(setNumber)
         local castCount = 0
         
         -- Each cast goes through cleansing mode and fallback handling
-        if TotemNesia.CastTotemForElement("fire", set.fire) then
+        if TotemNesia.CastTotemForElement("fire", set.fire, true) then
             castCount = castCount + 1
         end
         
-        if TotemNesia.CastTotemForElement("earth", set.earth) then
+        if TotemNesia.CastTotemForElement("earth", set.earth, true) then
             castCount = castCount + 1
         end
         
-        if TotemNesia.CastTotemForElement("water", set.water) then
+        if TotemNesia.CastTotemForElement("water", set.water, true) then
             castCount = castCount + 1
         end
         
-        if TotemNesia.CastTotemForElement("air", set.air) then
+        if TotemNesia.CastTotemForElement("air", set.air, true) then
             castCount = castCount + 1
         end
         

@@ -47,7 +47,7 @@ Other changes in 2.0:
 - **Duration timer** - Countdown in minutes (30m, 1m) or seconds (59, 30, 1) when under 1 minute
 - **Hide option** - Optional checkbox to hide this slot if not needed
 
-### Totem Casting
+### Totem Casting (v4.0+)
 - **Keybind support** - Set up a keybind in ESC > Key Bindings > TotemNesia
 - **Nampower detection** - Automatically detects nampower client mod for instant 4-totem casting
 - **Adaptive casting modes:**
@@ -58,7 +58,7 @@ Other changes in 2.0:
 
 <img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/1%20button%20totems.gif?raw=true">
 
-### Totem Sets
+### Totem Sets (v3.4+)
 - **5 configurable sets** - Create up to 5 different totem combinations for various situations
 - **Visual assignment interface** - Click totems to assign one from each family (Fire, Earth, Water, Air) to each set
 - **Gold border highlighting** - Selected totems show a gold border for easy identification
@@ -112,10 +112,10 @@ Vanilla WoW (1.12) has API restrictions that prevent addons from automatically c
 ### Weapon Enchant Detection
 The weapon enchant system uses the `GetWeaponEnchantInfo()` API to detect active enchants and their expiration times. Because weapon enchants don't show as scannable buffs in Vanilla WoW, the addon reads the enchant name from your main hand weapon's tooltip to work out which one is active. That means the correct icon shows up even after a reload or login. If the tooltip can't be read, it falls back to the last enchant you cast from the flyout or the weapon slot.
 
-### Sequential Totem Casting
+### Sequential Totem Casting (v4.0+)
 The sequential casting feature respects Vanilla WoW's "one spell per keypress" limitation. Each keypress casts one totem in order (Fire → Earth → Water → Air). The addon tracks which totem is next and automatically resets to Fire after 5 seconds of inactivity. This feature requires the `Bindings.xml` file to be present for keybind registration.
 
-### Totem Sets and Nampower Detection
+### Totem Sets and Nampower Detection (v3.4+)
 The totem sets system stores 5 independent configurations in `TotemNesiaDB.totemSets`, each containing one totem from each family. On login, the addon attempts to call `GetNampowerVersion()` to detect if the nampower client mod is installed. If detected, keybinds cast all 4 totems instantly by calling `CastSpellByName()` for each totem in sequence. Without nampower, the system uses the same sequential casting logic as v4.0, requiring the player to spam the keybind to cycle through all 4 totems. A 10-second inactivity timeout automatically resets the sequence to Fire totem.
 
 ## Contributing

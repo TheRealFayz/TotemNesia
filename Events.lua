@@ -220,7 +220,7 @@ eventFrame:SetScript("OnEvent", function()
             
             -- Play audio only if player can use Totemic Recall
             if TotemNesiaDB.audioEnabled and TotemNesia.CanUseTotemicRecall() then
-                PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Pick_up_your_totems.wav")
+                PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
             end
         else
             TotemNesia.hasTotems = false
@@ -324,7 +324,7 @@ timerFrame:SetScript("OnUpdate", function()
                 iconFrame:Show()
                 TotemNesia.displayTimer = TotemNesiaDB.timerDuration
                 if TotemNesiaDB.audioEnabled then
-                    PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Pick_up_your_totems.wav")
+                    PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\notification.mp3")
                 end
                 TotemNesia.DebugPrint("Too far from totems - UI shown")
             end

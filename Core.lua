@@ -692,10 +692,17 @@ function TotemNesia.ResolveTotemForElement(element, totemName)
 end
 
 -- Cast the right totem for an element (applies cleansing mode and fallbacks)
-function TotemNesia.CastTotemForElement(element, totemName)
+-- queue = true uses Nampower's QueueSpellByName so several totems in one keypress line up
+-- behind each other. Plain CastSpellByName calls in the same frame override each other,
+-- which leaves only one totem down per press.
+function TotemNesia.CastTotemForElement(element, totemName, queue)
     local toCast, usedFallback = TotemNesia.ResolveTotemForElement(element, totemName)
     if toCast and toCast ~= "" then
-        CastSpellByName(toCast)
+        if queue and QueueSpellByName then
+            QueueSpellByName(toCast)
+        else
+            CastSpellByName(toCast)
+        end
         if usedFallback then
             TotemNesia.DebugPrint(tostring(totemName) .. " on cooldown - cast fallback " .. toCast)
         end
