@@ -70,7 +70,7 @@ menuTitle:SetTextColor(1, 0.82, 0, 1)  -- Yellow color
 -- Author credit (smaller text below title)
 local authorText = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 authorText:SetPoint("TOP", menuTitle, "BOTTOM", 0, -2)
-authorText:SetText("By Fayz of Nordanaar")
+authorText:SetText("By Fayz")
 authorText:SetTextColor(1, 1, 1, 1)  -- White color
 
 -- Close button (X in upper right)
@@ -297,15 +297,61 @@ function TNC.BuildOptionsUI()
     local function RoundFive(v) return math.floor(v / 5 + 0.5) * 5 end
 
     -- ------------------------------------------------------------------
-    -- Tabs
+    -- Pages and tabs
+    -- Every tab is a page inside the one scroll area. Only the selected page is shown,
+    -- and the scroll area is sized to that page so there is no empty space at the bottom.
     -- ------------------------------------------------------------------
-    local totemSetsContent = CreateFrame("Frame", nil, optionsMenu)
-    totemSetsContent:SetAllPoints(optionsMenu)
-    totemSetsContent:Hide()
+    local sc = settingsScrollChild
+    local COL_L, COL_R = 15, 195
+    local pages = {}
+    local pg      -- page being built
+    local y = 0   -- running row cursor on that page
 
-    local manaContent = CreateFrame("Frame", nil, optionsMenu)
-    manaContent:SetAllPoints(optionsMenu)
-    manaContent:Hide()
+    local function NewPage()
+        local page = CreateFrame("Frame", nil, sc)
+        page:SetPoint("TOPLEFT", sc, "TOPLEFT", 0, 0)
+        page:SetWidth(360)
+        page:SetHeight(10)
+        page:Hide()
+        table.insert(pages, page)
+        pg = page
+        y = -8
+        return page
+    end
+
+    -- Finish the page being built: remember how tall it is
+    local function EndPage()
+        pg.contentHeight = -y + 4
+        pg:SetHeight(pg.contentHeight)
+    end
+
+    -- Section header: white title with a thin gold line under it
+    local function Header(text)
+        MakeText(pg, "GameFontHighlight", "TOPLEFT", 12, y, text)
+        local line = pg:CreateTexture(nil, "ARTWORK")
+        line:SetTexture(1, 0.82, 0, 0.35)
+        line:SetHeight(1)
+        line:SetPoint("TOPLEFT", pg, "TOPLEFT", 12, y - 16)
+        line:SetPoint("TOPRIGHT", pg, "TOPRIGHT", -8, y - 16)
+        y = y - 24
+    end
+
+    -- Checkbox at the current row
+    local function Check(x, text, dbKey, invert, onChange)
+        return MakeCheckbox(pg, "TOPLEFT", x, y, text, dbKey, invert, onChange)
+    end
+
+    -- Slider at the current row, then move the cursor past it
+    local function Slider(minValue, maxValue, step, dbKey, format, round, onChange)
+        MakeSlider(pg, y, minValue, maxValue, step, dbKey, format, round, onChange)
+        y = y - 46
+    end
+
+    -- Small help text at the current row, then move the cursor past it
+    local function Note(text, height)
+        MakeText(pg, "GameFontNormalSmall", "TOPLEFT", COL_L, y, text, 335, "LEFT")
+        y = y - height
+    end
 
     local tabs = {}
     local function SelectTab(index)
@@ -316,29 +362,23 @@ function TNC.BuildOptionsUI()
                 tab:SetNormalTexture(INACTIVE_TAB)
             end
         end
-        if index == 1 then
-            settingsContent:SetVerticalScroll(0)
-            settingsScrollbar:SetValue(0)
-            settingsContent:Show()
-            settingsScrollbar:Show()
-        else
-            settingsContent:Hide()
-            settingsScrollbar:Hide()
+        for i, page in ipairs(pages) do
+            if i == index then
+                page:Show()
+            else
+                page:Hide()
+            end
         end
-        if index == 2 then
-            totemSetsContent:Show()
-            ui.RefreshSetsTab()
-        else
-            totemSetsContent:Hide()
-        end
+        sc:SetHeight(pages[index].contentHeight or 10)
+        settingsContent:UpdateScrollChildRect()
+        settingsContent:SetVerticalScroll(0)
+        settingsScrollbar:SetValue(0)
         if index == 3 then
-            manaContent:Show()
-        else
-            manaContent:Hide()
+            ui.RefreshSetsTab()
         end
     end
 
-    local tabNames = {"Settings", "Totem Sets", "Mana"}
+    local tabNames = {"General", "Totem Bar", "Totem Sets", "Alerts"}
     for i, name in ipairs(tabNames) do
         local tab = CreateFrame("Button", nil, optionsMenu)
         tab:SetWidth(100)
@@ -361,26 +401,215 @@ function TNC.BuildOptionsUI()
         tabs[i] = tab
     end
 
-    -- ------------------------------------------------------------------
-    -- Totem Sets tab
-    -- ------------------------------------------------------------------
-    MakeText(totemSetsContent, "GameFontNormal", "TOP", 0, -60,
-        "Click a set, then click totems to assign them.\nKeybinds: ESC > Key Bindings > TotemNesia (5 keybinds)", 380, "CENTER")
-    MakeText(totemSetsContent, "GameFontNormalLarge", "TOP", 0, -110, "Totem Set:")
+    -- ==================================================================
+    -- Tab 1: General
+    -- ==================================================================
+    NewPage()
 
+    Header("Recall Notification")
+    Check(COL_L, "Lock recall notification", "isLocked", false, function(locked)
+        if locked then
+            iconFrame:SetBackdropColor(0, 0, 0, 0.75)
+            iconFrame:RegisterForClicks("LeftButtonUp")
+            -- Hide frame if no active timer
+            if not TotemNesia.displayTimer or TotemNesia.displayTimer <= 0 then
+                iconFrame:Hide()
+            end
+        else
+            iconFrame:SetBackdropColor(0, 0, 0, 1)
+            iconFrame:RegisterForClicks()
+            iconFrame:Show()
+        end
+    end)
+    Check(COL_R, "Hide recall notification", "hideUIElement")
+    y = y - 30
+    Slider(15, 60, 1, "timerDuration",
+        function(v) return "Display Duration: " .. v .. "s" end, RoundWhole)
+    Slider(0.5, 2.0, 0.1, "uiFrameScale",
+        function(v) return "Scale: " .. v end, RoundTenth,
+        function(v) iconFrame:SetScale(v) end)
+    y = y - 6
+
+    Header("Totem Tracker")
+    Check(COL_L, "Lock totem tracker", "totemTrackerLocked", false, function(locked)
+        totemTracker:EnableMouse(not locked)
+    end)
+    Check(COL_R, "Hide totem tracker", "totemTrackerHidden", false, function()
+        TotemNesia.UpdateTotemTracker()
+    end)
+    y = y - 30
+    Slider(0.5, 2.0, 0.1, "totemTrackerScale",
+        function(v) return "Scale: " .. v end, RoundTenth,
+        function(v) totemTracker:SetScale(v) end)
+    y = y - 6
+
+    Header("Totem Range")
+    Slider(10, 40, 1, "totemRange",
+        function(v) return "Totem Range: " .. v .. " yds" end, RoundWhole)
+    Note("The recall reminder shows when you move farther than this from your totems. With SuperWoW, totem icons also turn red when you are out of a totem's range (Searing Totem 20 yds, Magma Totem 8 yds).", 52)
+
+    Header("Enabled When In")
+    Check(COL_L, "Solo", "enabledSolo")
+    Check(135, "Parties", "enabledParty")
+    Check(255, "Raids", "enabledRaid")
+    y = y - 36
+
+    Header("Keybinds and Macro")
+    Note("Set keybinds in ESC > Key Bindings > TotemNesia. Recall macro (click to select, then Ctrl-C):", 30)
+    local RECALL_MACRO = "/script TotemNesia_RecallTotems()"
+    local macroBox = CreateFrame("EditBox", nil, pg)
+    macroBox:SetPoint("TOPLEFT", COL_L + 4, y)
+    macroBox:SetWidth(330)
+    macroBox:SetHeight(20)
+    macroBox:SetFontObject(GameFontHighlightSmall)
+    macroBox:SetText(RECALL_MACRO)
+    macroBox:SetAutoFocus(false)
+    macroBox:SetScript("OnEditFocusGained", function() this:HighlightText() end)
+    macroBox:SetScript("OnEscapePressed", function() this:ClearFocus() end)
+    macroBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
+    macroBox:SetScript("OnChar", function()
+        -- Block all character input
+        this:SetText(RECALL_MACRO)
+        this:HighlightText()
+    end)
+    macroBox:SetScript("OnTextChanged", function()
+        -- Restore text if it gets changed
+        if this:GetText() ~= RECALL_MACRO then
+            this:SetText(RECALL_MACRO)
+            this:HighlightText()
+        end
+    end)
+    y = y - 28
+    Check(COL_L, "Debug mode", "debugMode")
+    y = y - 30
+    EndPage()
+
+    -- ==================================================================
+    -- Tab 2: Totem Bar
+    -- ==================================================================
+    NewPage()
+
+    Header("Totem Bar")
+    Check(COL_L, "Enable totem bar", "totemBarEnabled", false, function()
+        TotemNesia.UpdateTotemBar()
+    end)
+    Check(COL_R, "Lock totem bar", "totemBarLocked", false, function(locked)
+        totemBar:EnableMouse(not locked)
+    end)
+    y = y - 26
+    Check(COL_L, "Disable shift for flyouts", "shiftToOpenFlyouts")
+    y = y - 36
+
+    Header("Slots")
+    Check(COL_L, "Hide weapon enchant slot", "hideWeaponSlot", false, function()
+        TotemNesia.UpdateTotemBar()
+    end)
+    Check(COL_R, "Hide shield slot", "hideShieldSlot", false, function()
+        TotemNesia.UpdateTotemBar()
+    end)
+    y = y - 26
+    Check(COL_L, "Flash when shield is low", "shieldFlash")
+    y = y - 36
+
+    Header("Layout")
+    MakeText(pg, "GameFontNormal", "TOPLEFT", COL_L + 4, y, "Orientation:")
+    MakeText(pg, "GameFontNormal", "TOPLEFT", COL_R + 4, y, "Flyout Direction:")
+    local layoutButton = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+    layoutButton:SetWidth(140)
+    layoutButton:SetHeight(24)
+    layoutButton:SetPoint("TOPLEFT", COL_L, y - 16)
+    layoutButton:SetText("Horizontal")
+
+    local flyoutButton = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+    flyoutButton:SetWidth(140)
+    flyoutButton:SetHeight(24)
+    flyoutButton:SetPoint("TOPLEFT", COL_R, y - 16)
+    flyoutButton:SetText("Up")
+
+    layoutButton:SetScript("OnClick", function()
+        if TotemNesiaDB.totemBarLayout == "Horizontal" then
+            -- Vertical layout defaults its flyouts to the right
+            TotemNesiaDB.totemBarLayout = "Vertical"
+            TotemNesiaDB.totemBarFlyoutDirection = "Right"
+        else
+            -- Horizontal layout defaults its flyouts upward
+            TotemNesiaDB.totemBarLayout = "Horizontal"
+            TotemNesiaDB.totemBarFlyoutDirection = "Up"
+        end
+        this:SetText(TotemNesiaDB.totemBarLayout)
+        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection)
+        TotemNesia.DebugPrint("Layout changed to " .. TotemNesiaDB.totemBarLayout .. ", flyout direction set to " .. TotemNesiaDB.totemBarFlyoutDirection)
+        TotemNesia.UpdateTotemBar()
+        TotemNesia.UpdateTotemBarFlyouts()
+    end)
+
+    flyoutButton:SetScript("OnClick", function()
+        local direction = TotemNesiaDB.totemBarFlyoutDirection
+        if TotemNesiaDB.totemBarLayout == "Vertical" then
+            -- Vertical layout: cycle between Left and Right
+            if direction == "Left" then direction = "Right" else direction = "Left" end
+        else
+            -- Horizontal layout: cycle between Up and Down
+            if direction == "Up" then direction = "Down" else direction = "Up" end
+        end
+        TotemNesiaDB.totemBarFlyoutDirection = direction
+        this:SetText(direction)
+        TotemNesia.UpdateTotemBarFlyouts()
+    end)
+    ui.layoutButton = layoutButton
+    ui.flyoutButton = flyoutButton
+    y = y - 50
+    Slider(0.5, 2.0, 0.1, "totemBarScale",
+        function(v) return "Scale: " .. v end, RoundTenth,
+        function(v) totemBar:SetScale(v) end)
+    y = y - 6
+
+    Header("How to Use")
+    Note("Hold Shift and mouse over a slot to open its flyout (unless shift is disabled above).", 30)
+    Note("Ctrl-click a flyout totem or weapon enchant to put it in the slot.", 18)
+    Note("Alt-click a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown. Alt-click it again to clear.", 30)
+    Note("Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off.", 30)
+    Note("Click the shield slot, or use the Recast Shield keybind, to recast your shield.", 22)
+    EndPage()
+
+    -- ==================================================================
+    -- Tab 3: Totem Sets
+    -- ==================================================================
+    local setsPage = NewPage()
+    Note("Pick a set, then click a totem in each row to assign it. A gold border marks the assigned totem. Each set has its own keybind in ESC > Key Bindings > TotemNesia.", 44)
+
+    Header("Set")
+    local setButtons = {}
+    for i = 1, 5 do
+        local btn = CreateFrame("Button", nil, setsPage, "UIPanelButtonTemplate")
+        btn:SetWidth(44)
+        btn:SetHeight(24)
+        btn:SetPoint("TOPLEFT", COL_L + (i - 1) * 52, y)
+        btn:SetText(tostring(i))
+        btn.setNumber = i
+        btn:SetScript("OnClick", function()
+            TotemNesiaDB.currentTotemSet = this.setNumber
+            TotemNesia.DebugPrint("Selected Set " .. this.setNumber)
+            ui.RefreshSetsTab()
+        end)
+        setButtons[i] = btn
+    end
+    setButtons[1]:LockHighlight()
+    y = y - 36
+
+    Header("Totems")
     -- One row per element: label, clear button, totem buttons
     local setRows = {
-        {element = "fire", title = "Fire", y = -190, color = {1, 0.3, 0.3},
+        {element = "fire", title = "Fire", color = {1, 0.3, 0.3},
          totems = {"Searing Totem", "Fire Nova Totem", "Magma Totem", "Flametongue Totem", "Frost Resistance Totem"}},
-        {element = "earth", title = "Earth", y = -235, color = {0.8, 0.6, 0.3},
+        {element = "earth", title = "Earth", color = {0.8, 0.6, 0.3},
          totems = {"Stoneclaw Totem", "Stoneskin Totem", "Earthbind Totem", "Strength of Earth Totem", "Tremor Totem"}},
-        {element = "water", title = "Water", y = -280, color = {0.3, 0.5, 1},
+        {element = "water", title = "Water", color = {0.3, 0.5, 1},
          totems = {"Healing Stream Totem", "Mana Spring Totem", "Fire Resistance Totem", "Disease Cleansing Totem", "Poison Cleansing Totem"}},
-        {element = "air", title = "Air", y = -325, color = {0.7, 0.9, 1},
+        {element = "air", title = "Air", color = {0.7, 0.9, 1},
          totems = {"Grounding Totem", "Windfury Totem", "Grace of Air Totem", "Nature Resistance Totem", "Tranquil Air Totem", "Windwall Totem"}}
     }
     local setTotemButtons = {}  -- element -> list of buttons
-    local setButtons = {}
 
     -- Gold border on the totem picked for the current set, for one element
     local function UpdateSetBorders(element)
@@ -417,23 +646,6 @@ function TNC.BuildOptionsUI()
         end
     end
 
-    -- Set selector buttons (1-5)
-    for i = 1, 5 do
-        local btn = CreateFrame("Button", nil, totemSetsContent, "UIPanelButtonTemplate")
-        btn:SetWidth(40)
-        btn:SetHeight(28)
-        btn:SetPoint("TOP", -110 + (i - 1) * 55, -140)
-        btn:SetText(tostring(i))
-        btn.setNumber = i
-        btn:SetScript("OnClick", function()
-            TotemNesiaDB.currentTotemSet = this.setNumber
-            TotemNesia.DebugPrint("Selected Set " .. this.setNumber)
-            ui.RefreshSetsTab()
-        end)
-        setButtons[i] = btn
-    end
-    setButtons[1]:LockHighlight()
-
     local function TotemTooltip()
         GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
         local highestId = GetHighestLearnedRank(this.totemName)
@@ -451,13 +663,14 @@ function TNC.BuildOptionsUI()
     for _, row in ipairs(setRows) do
         local element = row.element
         setTotemButtons[element] = {}
-        MakeText(totemSetsContent, "GameFontNormalLarge", "TOPLEFT", 20, row.y, row.title .. ":")
+        local label = MakeText(setsPage, "GameFontNormal", "TOPLEFT", COL_L + 4, y - 8, row.title)
+        label:SetTextColor(row.color[1], row.color[2], row.color[3])
 
         -- Clear button
-        local clearBtn = CreateFrame("Button", nil, totemSetsContent)
-        clearBtn:SetWidth(20)
-        clearBtn:SetHeight(20)
-        clearBtn:SetPoint("TOPLEFT", 60, row.y - 4)
+        local clearBtn = CreateFrame("Button", nil, setsPage)
+        clearBtn:SetWidth(22)
+        clearBtn:SetHeight(22)
+        clearBtn:SetPoint("TOPLEFT", 62, y - 3)
         clearBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
         clearBtn:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
         clearBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
@@ -478,10 +691,10 @@ function TNC.BuildOptionsUI()
 
         -- Totem buttons
         for j, totemName in ipairs(row.totems) do
-            local btn = CreateFrame("Button", nil, totemSetsContent)
+            local btn = CreateFrame("Button", nil, setsPage)
             btn:SetWidth(28)
             btn:SetHeight(28)
-            btn:SetPoint("TOPLEFT", 80 + (j - 1) * 32, row.y)
+            btn:SetPoint("TOPLEFT", 90 + (j - 1) * 32, y)
             btn:SetBackdrop(BUTTON_BACKDROP)
             btn:SetBackdropColor(row.color[1], row.color[2], row.color[3], 0.6)
             btn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
@@ -511,183 +724,74 @@ function TNC.BuildOptionsUI()
             end)
             table.insert(setTotemButtons[element], btn)
         end
+        y = y - 36
     end
+    EndPage()
 
-    -- ------------------------------------------------------------------
-    -- Mana tab
-    -- ------------------------------------------------------------------
-    MakeText(manaContent, "GameFontNormalLarge", "TOP", 0, -60, "Mana Management")
-    MakeText(manaContent, "GameFontNormal", "TOP", 0, -85,
-        "Configure low mana alerts to help manage your mana pool during combat.", 360, "CENTER")
-    MakeCheckbox(manaContent, "TOPLEFT", 20, -110, "Mute low mana alert", "manaAudioMuted")
-    MakeCheckbox(manaContent, "TOPLEFT", 20, -140, "Mute potion alert", "potionAudioMuted")
-    MakeCheckbox(manaContent, "TOPLEFT", 210, -110, "Disable public mana alert", "publicManaMuted")
-    MakeSlider(manaContent, -170, 0, 100, 5, "manaThreshold",
-        function(v) return "Low Mana Alert Threshold: " .. v .. "%" end, RoundFive)
-    MakeSlider(manaContent, -220, 0, 100, 5, "potionThreshold",
-        function(v) return "Potion Alert: " .. v .. "%" end, RoundFive)
-    MakeText(manaContent, "GameFontNormalSmall", "TOP", 0, -280,
-        "The addon will play an audio alert when your mana drops below the threshold.\n\nThe alert has a 30-second cooldown to prevent spam and only triggers when crossing below the threshold (not while hovering).",
-        360, "LEFT")
+    -- ==================================================================
+    -- Tab 4: Alerts
+    -- ==================================================================
+    NewPage()
 
-    -- ------------------------------------------------------------------
-    -- Settings tab (scrolling)
-    -- ------------------------------------------------------------------
-    local sc = settingsScrollChild
-
-    -- Left column
-    MakeCheckbox(sc, "TOPLEFT", 20, -45, "Lock recall notification", "isLocked", false, function(locked)
-        if locked then
-            iconFrame:SetBackdropColor(0, 0, 0, 0.75)
-            iconFrame:RegisterForClicks("LeftButtonUp")
-            -- Hide frame if no active timer
-            if not TotemNesia.displayTimer or TotemNesia.displayTimer <= 0 then
-                iconFrame:Hide()
+    Header("Audio Alerts")
+    MakeText(pg, "GameFontNormal", "TOPLEFT", COL_L, y - 10, "Alert Voice:")
+    local voiceDropDown = CreateFrame("Frame", "TotemNesiaVoiceDropDown", pg, "UIDropDownMenuTemplate")
+    voiceDropDown:SetPoint("TOPLEFT", 75, y)
+    UIDropDownMenu_SetWidth(110, voiceDropDown)
+    UIDropDownMenu_Initialize(voiceDropDown, function()
+        for _, name in ipairs(TNC.VOICES) do
+            local info = {}
+            info.text = name
+            info.value = name
+            info.checked = (TotemNesiaDB and TotemNesiaDB.alertVoice == name)
+            info.func = function()
+                TotemNesiaDB.alertVoice = this.value
+                UIDropDownMenu_SetText(this.value, TotemNesiaVoiceDropDown)
             end
-        else
-            iconFrame:SetBackdropColor(0, 0, 0, 1)
-            iconFrame:RegisterForClicks()
-            iconFrame:Show()
+            UIDropDownMenu_AddButton(info)
         end
     end)
-    MakeCheckbox(sc, "TOPLEFT", 20, -75, "Hide recall notification", "hideUIElement")
-    MakeCheckbox(sc, "TOPLEFT", 20, -105, "Mute recall audio queue", "audioEnabled", true)
-    MakeCheckbox(sc, "TOPLEFT", 20, -135, "Lock totem tracker", "totemTrackerLocked", false, function(locked)
-        totemTracker:EnableMouse(not locked)
+    ui.voiceDropDown = voiceDropDown
+
+    -- Play button: plays the Totems alert in the chosen voice (ignores the mute settings)
+    local voiceTest = CreateFrame("Button", nil, pg)
+    voiceTest:SetWidth(26)
+    voiceTest:SetHeight(26)
+    voiceTest:SetPoint("LEFT", voiceDropDown, "RIGHT", -12, 2)
+    voiceTest:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    voiceTest:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+    voiceTest:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+    voiceTest:SetScript("OnClick", function()
+        TotemNesia.PlayAlertSound("Totems")
     end)
-    MakeCheckbox(sc, "TOPLEFT", 20, -165, "Hide totem tracker", "totemTrackerHidden", false, function()
-        TotemNesia.UpdateTotemTracker()
+    voiceTest:SetScript("OnEnter", function()
+        TotemNesia.SetTooltipOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Test voice", 1, 1, 1)
+        GameTooltip:AddLine("Plays the Totems alert in the chosen voice", 0.6, 0.6, 0.6)
+        GameTooltip:Show()
     end)
-
-    -- Right column
-    MakeCheckbox(sc, "TOPLEFT", 210, -45, "Enable totem bar", "totemBarEnabled", false, function()
-        TotemNesia.UpdateTotemBar()
+    voiceTest:SetScript("OnLeave", function()
+        GameTooltip:Hide()
     end)
-    MakeCheckbox(sc, "TOPLEFT", 210, -75, "Lock totem bar", "totemBarLocked", false, function(locked)
-        totemBar:EnableMouse(not locked)
-    end)
-    MakeCheckbox(sc, "TOPLEFT", 210, -105, "Disable shift for flyouts", "shiftToOpenFlyouts")
-    MakeCheckbox(sc, "TOPLEFT", 210, -135, "Hide weapon enchant slot", "hideWeaponSlot", false, function()
-        TotemNesia.UpdateTotemBar()
-    end)
+    y = y - 36
+    Check(COL_L, "Mute recall alert", "audioEnabled", true)
+    Check(COL_R, "Mute low mana alert", "manaAudioMuted")
+    y = y - 26
+    Check(COL_L, "Mute potion alert", "potionAudioMuted")
+    y = y - 36
 
-    -- Group types
-    MakeText(sc, "GameFontNormal", "TOPLEFT", 20, -190, "Will be enabled when in:")
-    MakeCheckbox(sc, "TOPLEFT", 20, -210, "Solo", "enabledSolo")
-    MakeCheckbox(sc, "TOPLEFT", 20, -235, "Parties", "enabledParty")
-    MakeCheckbox(sc, "TOPLEFT", 20, -260, "Raids", "enabledRaid")
+    Header("Mana Alerts")
+    Slider(0, 100, 5, "manaThreshold",
+        function(v) return "Low Mana Threshold: " .. v .. "%" end, RoundFive)
+    Slider(0, 100, 5, "potionThreshold",
+        function(v) return "Potion Threshold: " .. v .. "%" end, RoundFive)
+    Note("An alert plays when your mana drops below a threshold. Each alert has a 30 second cooldown and only fires when you cross below the line. Set a slider to 0% to turn that alert off.", 52)
 
-    -- Totem bar layout and flyout direction
-    local layoutButton = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
-    layoutButton:SetWidth(120)
-    layoutButton:SetHeight(24)
-    layoutButton:SetPoint("TOPRIGHT", -20, -205)
-    layoutButton:SetText("Horizontal")
-    local layoutLabel = sc:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    layoutLabel:SetPoint("BOTTOM", layoutButton, "TOP", 0, 2)
-    layoutLabel:SetText("Totem Bar Layout:")
-
-    local flyoutButton = CreateFrame("Button", nil, sc, "UIPanelButtonTemplate")
-    flyoutButton:SetWidth(120)
-    flyoutButton:SetHeight(24)
-    flyoutButton:SetPoint("TOPRIGHT", -20, -255)
-    flyoutButton:SetText("Up")
-    local flyoutLabel = sc:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    flyoutLabel:SetPoint("BOTTOM", flyoutButton, "TOP", 0, 2)
-    flyoutLabel:SetText("Flyout Direction:")
-
-    layoutButton:SetScript("OnClick", function()
-        if TotemNesiaDB.totemBarLayout == "Horizontal" then
-            -- Vertical layout defaults its flyouts to the right
-            TotemNesiaDB.totemBarLayout = "Vertical"
-            TotemNesiaDB.totemBarFlyoutDirection = "Right"
-        else
-            -- Horizontal layout defaults its flyouts upward
-            TotemNesiaDB.totemBarLayout = "Horizontal"
-            TotemNesiaDB.totemBarFlyoutDirection = "Up"
-        end
-        this:SetText(TotemNesiaDB.totemBarLayout)
-        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection)
-        TotemNesia.DebugPrint("Layout changed to " .. TotemNesiaDB.totemBarLayout .. ", flyout direction set to " .. TotemNesiaDB.totemBarFlyoutDirection)
-        TotemNesia.UpdateTotemBar()
-        TotemNesia.UpdateTotemBarFlyouts()
-    end)
-
-    flyoutButton:SetScript("OnClick", function()
-        local direction = TotemNesiaDB.totemBarFlyoutDirection
-        if TotemNesiaDB.totemBarLayout == "Vertical" then
-            -- Vertical layout: cycle between Left and Right
-            if direction == "Left" then direction = "Right" else direction = "Left" end
-        else
-            -- Horizontal layout: cycle between Up and Down
-            if direction == "Up" then direction = "Down" else direction = "Up" end
-        end
-        TotemNesiaDB.totemBarFlyoutDirection = direction
-        this:SetText(direction)
-        TotemNesia.UpdateTotemBarFlyouts()
-    end)
-    ui.layoutButton = layoutButton
-    ui.flyoutButton = flyoutButton
-
-    -- Sliders
-    MakeSlider(sc, -285, 15, 60, 1, "timerDuration",
-        function(v) return "Display Duration: " .. v .. "s" end, RoundWhole)
-    MakeSlider(sc, -330, 0.5, 2.0, 0.1, "uiFrameScale",
-        function(v) return "Recall Notification Scale: " .. v end, RoundTenth,
-        function(v) iconFrame:SetScale(v) end)
-    MakeSlider(sc, -375, 0.5, 2.0, 0.1, "totemTrackerScale",
-        function(v) return "Totem Tracker Scale: " .. v end, RoundTenth,
-        function(v) totemTracker:SetScale(v) end)
-    MakeSlider(sc, -420, 0.5, 2.0, 0.1, "totemBarScale",
-        function(v) return "Totem Bar Scale: " .. v end, RoundTenth,
-        function(v) totemBar:SetScale(v) end)
-
-    -- Keybind note and read-only recall macro
-    MakeText(sc, "GameFontNormal", "TOP", 0, -530,
-        "Keybinds: Sequential Totem Cast keybind available in ESC > Key Bindings > TotemNesia", 360, "CENTER")
-    local RECALL_MACRO = "/script TotemNesia_RecallTotems()"
-    local macroBox = CreateFrame("EditBox", nil, sc)
-    macroBox:SetPoint("TOPLEFT", 20, -550)
-    macroBox:SetWidth(360)
-    macroBox:SetHeight(20)
-    macroBox:SetFontObject(GameFontNormalSmall)
-    macroBox:SetText(RECALL_MACRO)
-    macroBox:SetAutoFocus(false)
-    macroBox:SetScript("OnEditFocusGained", function() this:HighlightText() end)
-    macroBox:SetScript("OnEscapePressed", function() this:ClearFocus() end)
-    macroBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
-    macroBox:SetScript("OnChar", function()
-        -- Block all character input
-        this:SetText(RECALL_MACRO)
-        this:HighlightText()
-    end)
-    macroBox:SetScript("OnTextChanged", function()
-        -- Restore text if it gets changed
-        if this:GetText() ~= RECALL_MACRO then
-            this:SetText(RECALL_MACRO)
-            this:HighlightText()
-        end
-    end)
-
-    MakeCheckbox(sc, "TOPRIGHT", -20, -550, "Debug mode", "debugMode", false, nil, true)
-
-    -- Range
-    MakeSlider(sc, -595, 10, 40, 1, "totemRange",
-        function(v) return "Totem Range: " .. v .. " yds" end, RoundWhole)
-    MakeText(sc, "GameFontNormalSmall", "TOP", 0, -638,
-        "The recall reminder shows when you move farther than this from your totems. With SuperWoW, totem icons also turn red when you are out of a totem's range (Searing Totem 20 yds, Magma Totem 8 yds).",
-        350, "LEFT")
-
-    -- Shield slot
-    MakeCheckbox(sc, "TOPLEFT", 20, -685, "Hide shield slot", "hideShieldSlot", false, function()
-        TotemNesia.UpdateTotemBar()
-    end)
-    MakeCheckbox(sc, "TOPLEFT", 210, -685, "Flash when shield is low", "shieldFlash")
-
-    -- Totem bar controls help
-    MakeText(sc, "GameFontNormalSmall", "TOP", 0, -720,
-        "Totem bar: Ctrl-click a flyout totem to put it in the slot. Alt-click a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown (Alt-click it again to clear). Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. Click the shield slot, or use the Recast Shield keybind, to recast your shield.",
-        350, "LEFT")
+    Header("Chat")
+    Check(COL_L, "Disable public mana alert", "publicManaMuted")
+    y = y - 30
+    Note("When your mana drops below 15%, TotemNesia says \"I am low on mana, I need to drink.\" in /say so your group knows. 30 second cooldown.", 40)
+    EndPage()
 
     -- ------------------------------------------------------------------
     -- Refresh every control from the saved settings (runs when the window opens)
@@ -709,6 +813,7 @@ function TNC.BuildOptionsUI()
         end
         layoutButton:SetText(TotemNesiaDB.totemBarLayout or "Horizontal")
         flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection or "Up")
+        UIDropDownMenu_SetText(TotemNesiaDB.alertVoice or "Jenny", voiceDropDown)
         SelectTab(1)
     end
 end

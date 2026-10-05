@@ -258,6 +258,9 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.audioEnabled == nil then
         TotemNesiaDB.audioEnabled = true
     end
+    if TotemNesiaDB.alertVoice == nil then
+        TotemNesiaDB.alertVoice = "Jenny"
+    end
     if TotemNesiaDB.minimapPos == nil then
         TotemNesiaDB.minimapPos = 180
     end
@@ -387,6 +390,19 @@ function TotemNesia.DebugPrint(msg)
     if TotemNesiaDB and TotemNesiaDB.debugMode then
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia DEBUG: " .. msg)
     end
+end
+
+-- Voice actors for the audio alerts (picked in the Settings tab). Each one needs three files
+-- in Sounds: "Totems - <name>.mp3", "Low Mana - <name>.mp3", "Mana Potion - <name>.mp3".
+-- To add a voice, add the files and put the name in this list.
+TNC.VOICES = {"Jenny", "Aria", "Roger"}
+
+-- Play a voice alert. Files live in Sounds as "<alert> - <voice>.mp3",
+-- e.g. "Totems - Jenny.mp3". Alerts: "Totems", "Low Mana", "Mana Potion".
+-- The voice comes from TotemNesiaDB.alertVoice (default "Jenny").
+function TotemNesia.PlayAlertSound(alert)
+    local voice = (TotemNesiaDB and TotemNesiaDB.alertVoice) or "Jenny"
+    PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\" .. alert .. " - " .. voice .. ".mp3")
 end
 
 -- Function to check if addon should be active based on group settings
@@ -692,14 +708,17 @@ function TotemNesia.ResolveTotemForElement(element, totemName)
 end
 
 -- Cast the right totem for an element (applies cleansing mode and fallbacks)
--- queue = true uses Nampower's QueueSpellByName so several totems in one keypress line up
--- behind each other. Plain CastSpellByName calls in the same frame override each other,
--- which leaves only one totem down per press.
+-- queue = true is used when several totems are cast from one keypress (Nampower).
+-- Those casts go through CastSpell with the spellbook index, the same path as action
+-- bar buttons, which Nampower queues so every totem lands. CastSpellByName and
+-- QueueSpellByName calls in the same keypress collide and only the first totem drops.
+-- (Same approach as SuperTotem.)
 function TotemNesia.CastTotemForElement(element, totemName, queue)
     local toCast, usedFallback = TotemNesia.ResolveTotemForElement(element, totemName)
     if toCast and toCast ~= "" then
-        if queue and QueueSpellByName then
-            QueueSpellByName(toCast)
+        local info = queue and TotemNesia.GetCachedSpell(toCast)
+        if info then
+            CastSpell(info.id, BOOKTYPE_SPELL)
         else
             CastSpellByName(toCast)
         end

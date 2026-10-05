@@ -32,7 +32,7 @@ function TotemNesia.CheckManaAlerts()
         if manaPercent < manaThreshold and not TotemNesia.belowThreshold then
             TotemNesia.belowThreshold = true
             if not TotemNesiaDB.manaAudioMuted and TotemNesia.manaAlertCooldown <= 0 then
-                PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Your_mana_is_low.wav")
+                TotemNesia.PlayAlertSound("Low Mana")
                 TotemNesia.manaAlertCooldown = 30
                 TotemNesia.DebugPrint("Low mana alert played: " .. math.floor(manaPercent) .. "%")
             end
@@ -48,7 +48,7 @@ function TotemNesia.CheckManaAlerts()
         if manaPercent < potionThreshold and not TotemNesia.belowPotionThreshold then
             TotemNesia.belowPotionThreshold = true
             if not TotemNesiaDB.potionAudioMuted and TotemNesia.potionAlertCooldown <= 0 then
-                PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\Use_a_potion.wav")
+                TotemNesia.PlayAlertSound("Mana Potion")
                 TotemNesia.potionAlertCooldown = 30
                 TotemNesia.DebugPrint("Potion alert played: " .. math.floor(manaPercent) .. "%")
             end
