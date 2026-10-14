@@ -356,6 +356,30 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.publicManaMuted == nil then
         TotemNesiaDB.publicManaMuted = false
     end
+    -- Public mana message: party and raid can be turned on or off separately.
+    -- Players who had the old single "disable" box checked start with both off.
+    if TotemNesiaDB.publicManaParty == nil then
+        TotemNesiaDB.publicManaParty = not TotemNesiaDB.publicManaMuted
+    end
+    if TotemNesiaDB.publicManaRaid == nil then
+        TotemNesiaDB.publicManaRaid = not TotemNesiaDB.publicManaMuted
+    end
+    if TotemNesiaDB.publicManaThreshold == nil then
+        TotemNesiaDB.publicManaThreshold = 15  -- the old fixed value
+    end
+    -- Aggro alert (on-screen text and voice) and group announcements for aggro and line of sight
+    if TotemNesiaDB.aggroAlert == nil then
+        TotemNesiaDB.aggroAlert = true
+    end
+    if TotemNesiaDB.aggroAudioMuted == nil then
+        TotemNesiaDB.aggroAudioMuted = false
+    end
+    if TotemNesiaDB.aggroAnnounce == nil then
+        TotemNesiaDB.aggroAnnounce = true
+    end
+    if TotemNesiaDB.losAnnounce == nil then
+        TotemNesiaDB.losAnnounce = true
+    end
     
     -- Initialize totem sets (5 sets)
     if TotemNesiaDB.totemSets == nil then
@@ -393,16 +417,35 @@ function TotemNesia.DebugPrint(msg)
 end
 
 -- Voice actors for the audio alerts (picked in the Settings tab). Each one needs three files
--- in Sounds: "Totems - <name>.mp3", "Low Mana - <name>.mp3", "Mana Potion - <name>.mp3".
+-- in Sounds: "Totems - <name>.mp3", "Low Mana - <name>.mp3", "Mana Potion - <name>.mp3",
+-- and "Aggro - <name>.mp3".
 -- To add a voice, add the files and put the name in this list.
-TNC.VOICES = {"Jenny", "Aria", "Roger"}
+TNC.VOICES = {"Jenny", "Aria", "Roger", "Libby"}
 
 -- Play a voice alert. Files live in Sounds as "<alert> - <voice>.mp3",
--- e.g. "Totems - Jenny.mp3". Alerts: "Totems", "Low Mana", "Mana Potion".
+-- e.g. "Totems - Jenny.mp3". Alerts: "Totems", "Low Mana", "Mana Potion", "Aggro".
 -- The voice comes from TotemNesiaDB.alertVoice (default "Jenny").
 function TotemNesia.PlayAlertSound(alert)
     local voice = (TotemNesiaDB and TotemNesiaDB.alertVoice) or "Jenny"
     PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\" .. alert .. " - " .. voice .. ".mp3")
+end
+
+-- Which chat channel group announcements go to: raid chat in a raid, party chat in a party,
+-- nil when solo or when that group type is turned off on the Alerts tab. Never /say.
+-- Shared by the low mana, aggro, and line of sight announcements.
+function TotemNesia.GetAnnounceChannel()
+    if GetNumRaidMembers() > 0 then
+        if TotemNesiaDB.publicManaRaid then
+            return "RAID"
+        end
+        return nil
+    end
+    if GetNumPartyMembers() > 0 then
+        if TotemNesiaDB.publicManaParty then
+            return "PARTY"
+        end
+    end
+    return nil
 end
 
 -- Function to check if addon should be active based on group settings

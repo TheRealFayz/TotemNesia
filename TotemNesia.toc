@@ -10,6 +10,7 @@ Recall.lua
 TotemBar.lua
 Options.lua
 Mana.lua
+Alerts.lua
 Casting.lua
 Events.lua
 Bindings.xml

@@ -58,16 +58,21 @@ function TotemNesia.CheckManaAlerts()
         end
     end
     
-    -- Public mana message (fixed at 15%)
-    if manaPercent < 15 and not TotemNesia.belowPublicManaThreshold then
-        TotemNesia.belowPublicManaThreshold = true
-        if not TotemNesiaDB.publicManaMuted and TotemNesia.publicManaAlertCooldown <= 0 then
-            SendChatMessage("I am low on mana, I need to drink.", "SAY")
-            TotemNesia.publicManaAlertCooldown = 30
-            TotemNesia.DebugPrint("Public mana alert sent: 15%")
+    -- Public mana message: raid chat in a raid, party chat in a party, nothing when solo.
+    -- Never /say. Party and raid can each be turned off. Threshold from the Alerts tab, 0 turns it off.
+    local publicThreshold = TotemNesiaDB.publicManaThreshold or 15
+    if publicThreshold > 0 then
+        if manaPercent < publicThreshold and not TotemNesia.belowPublicManaThreshold then
+            TotemNesia.belowPublicManaThreshold = true
+            local channel = TotemNesia.GetAnnounceChannel()
+            if channel and TotemNesia.publicManaAlertCooldown <= 0 then
+                SendChatMessage("I am low on mana, I need to drink.", channel)
+                TotemNesia.publicManaAlertCooldown = 30
+                TotemNesia.DebugPrint("Public mana alert sent to " .. channel .. ": " .. math.floor(manaPercent) .. "%")
+            end
+        elseif manaPercent >= publicThreshold and TotemNesia.belowPublicManaThreshold then
+            TotemNesia.belowPublicManaThreshold = false
+            TotemNesia.DebugPrint("Mana restored above public mana threshold")
         end
-    elseif manaPercent >= 15 and TotemNesia.belowPublicManaThreshold then
-        TotemNesia.belowPublicManaThreshold = false
-        TotemNesia.DebugPrint("Mana restored above public mana threshold")
     end
 end

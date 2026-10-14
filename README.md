@@ -13,13 +13,16 @@ Version 2.0 is a big rewrite of how the addon is put together. The old single `T
 - `TotemBar.lua` - totem bar, flyouts, shield and weapon slots
 - `Options.lua` - settings window and minimap button
 - `Mana.lua` - mana alerts
+- `Alerts.lua` - aggro alert and line of sight announcement
 - `Casting.lua` - keybind and macro casting
 - `Events.lua` - game event handling
 
 Other changes in 2.0:
 - New settings window with four tabs: General, Totem Bar, Totem Sets, and Alerts
-- Voice alerts for Totems, Low Mana, and Mana Potion, with three voices to choose from (Jenny, Aria, and Roger) and more to come
+- Voice alerts for Totems, Low Mana, Mana Potion, and Aggro, with four voices to choose from (Jenny, Aria, Roger, and Libby) and more to come
 - Each audio alert can be muted on its own
+- New aggro alert: "You have aggro!" on screen and a voice cue when a mob is attacking you in a group
+- Group announcements for low mana, aggro, and line of sight, sent to party or raid chat (never /say)
 - Totem sets now drop every totem in one press with Nampower
 - Totem bar slots with no assigned totem now show the icon of the totem you have out for that element, and clear it when the totem is gone
 - Weapon enchants can be assigned to the weapon slot with Ctrl-click, the same way totems are
@@ -32,9 +35,8 @@ Other changes in 2.0:
 
 TotemNesia works on a plain client. Two client mods add extra features when they're installed:
 
-- **Nampower** - Totem set keybinds drop every totem in the set with one press. This needs Nampower's instant spell queuing turned on. If only one totem drops per press, run this once in game:
-  `/script SetCVar("NP_QueueInstantSpells", "1")`
-- **SuperWoW** - Real distance to each totem instead of an estimate, and totem bar icons turn red when you're out of a totem's range.
+- **Nampower** - Totem set keybinds drop every totem in the set with one press. Nampower has to queue instant spells for this to work, so if its instant spell queuing is off, TotemNesia turns it on for the moment it casts a set and puts your setting back a few seconds later. Nothing to set up.
+- **SuperWoW** - Real distance to each totem instead of an estimate, totem bar icons turn red when you're out of a totem's range, and the aggro alert can see mobs nobody in your group has targeted (enemy nameplates need to be on).
 
 ## Features
 
@@ -116,14 +118,27 @@ TotemNesia works on a plain client. Two client mods add extra features when they
 <img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totemic%20Recall.png?raw=true">
 
 ### Voice and Mana Alerts
-- **Three voices** - Jenny, Aria, and Roger, with more to come. Every alert uses the voice you pick.
+- **Four voices** - Jenny, Aria, Roger, and Libby, with more to come. Every alert uses the voice you pick.
 - **Test button** - Hear the selected voice before you commit to it
 - **Totems alert** - Plays with the recall notification
 - **Low mana alert** - Plays when your mana drops below a threshold you set (30% by default)
 - **Mana potion alert** - A second threshold to remind you to use a potion (30% by default)
-- **Separate mutes** - Mute any of the three alerts on its own
-- **No spam** - Each alert has a 30 second cooldown and only plays when you cross below the threshold. Set a threshold to 0% to turn that alert off.
-- **Public mana message** - At 15% mana, says "I am low on mana, I need to drink." in /say so your group knows. Can be turned off.
+- **Aggro alert** - Plays with the aggro warning (see below)
+- **Separate mutes** - Mute any of the four alerts on its own
+- **No spam** - Each mana alert has a 30 second cooldown and only plays when you cross below the threshold. Set a threshold to 0% to turn that alert off.
+
+### Aggro Alert
+- **On-screen warning** - "You have aggro!" in red, plus the Aggro voice
+- **Only when it matters** - Works in a party or raid while you're in combat. Solo you almost always have aggro, so it stays quiet.
+- **No false alarms** - A mob has to stay on you for a second, so one passing through on its way to the tank doesn't count. It alerts once when you pull aggro and won't repeat for 10 seconds.
+- **How it checks** - Vanilla has no aggro event, so twice a second the addon looks for a hostile mob targeting you. It checks your target, your pet's target, and every group member's target. With SuperWoW it also checks every mob with a visible nameplate, which catches mobs nobody has targeted. Turn on enemy nameplates (V key) for that part. If a client mod adds a threat API, that's checked first.
+
+### Group Announcements
+Messages go to party chat when you're in a party and raid chat when you're in a raid. Nothing is posted when you're solo, and nothing ever goes to /say. Parties and raids can each be turned off, for example to announce in dungeons but not raids.
+- **Low mana** - "I am low on mana, I need to drink." when your mana drops below a threshold you set (15% by default, 0% turns it off). 30 second cooldown.
+- **Aggro** - "I have aggro!" along with the aggro alert
+- **Line of sight** - "<Name>, you are out of LoS for healing." when a spell fails because a group member you have targeted is out of your line of sight. At most once every 5 seconds per player, so the tank knows to move and the group can see you tried to warn them.
+- Each announcement can be turned off on its own
 
 ### Smart Detection
 - **Combat log tracking** - Monitors individual totem summons and expirations
@@ -138,7 +153,7 @@ Click the minimap button to open the settings window. Right-click and drag the b
 - **General** - Recall notification, totem tracker, totem range, which group types the addon runs in (solo, party, raid), keybind help, the recall macro, and debug mode
 - **Totem Bar** - Enable, lock, slot options, layout, flyout direction, scale, and a quick guide to the bar's clicks
 - **Totem Sets** - Build your 5 totem sets
-- **Alerts** - Voice choice, alert mutes, mana thresholds, and the public mana message
+- **Alerts** - Voice choice, alert mutes, mana thresholds, the aggro alert, and group announcements
 
 ## Keybinds
 
@@ -165,12 +180,12 @@ The weapon enchant system uses the `GetWeaponEnchantInfo()` API to detect active
 ### Totem Sets and Nampower
 The totem sets system stores 5 independent configurations in `TotemNesiaDB.totemSets`, each containing one totem from each family. On login, the addon calls `GetNampowerVersion()` to check whether Nampower is installed.
 
-With Nampower, a set keybind casts every totem in the set during the same key press. Each totem is cast with `CastSpell()` using its spellbook index, the same way an action bar button casts it, and Nampower queues them so they all land. This needs Nampower's `NP_QueueInstantSpells` setting turned on.
+With Nampower, a set keybind casts every totem in the set during the same key press. Each totem is cast with `CastSpell()` using its spellbook index, the same way an action bar button casts it, and Nampower queues them so they all land. This needs Nampower's `NP_QueueInstantSpells` setting turned on. If Nampower's instant spell queuing is off, only the first totem would land, so TotemNesia turns it on for that key press and restores your setting 3 seconds later.
 
 Without Nampower, the client only allows one spell per key press, so each press casts the next totem in order (Fire, Earth, Water, Air). The addon remembers which totem is next and resets to Fire after 10 seconds without a press. This requires the `Bindings.xml` file to be present for keybind registration.
 
 ### Adding Voices
-Voice files live in the `Sounds` folder and are named `<Alert> - <Voice>.mp3`, for example `Totems - Jenny.mp3`. Each voice needs three files: `Totems`, `Low Mana`, and `Mana Potion`. To add a voice, drop in its three files and add the name to the `TNC.VOICES` list in `Core.lua`.
+Voice files live in the `Sounds` folder and are named `<Alert> - <Voice>.mp3`, for example `Totems - Jenny.mp3`. Each voice needs four files: `Totems`, `Low Mana`, `Mana Potion`, and `Aggro`. To add a voice, drop in its four files and add the name to the `TNC.VOICES` list in `Core.lua`.
 
 ## Contributing
 

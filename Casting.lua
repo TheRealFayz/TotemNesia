@@ -29,6 +29,39 @@ function TotemNesia_RecallTotems()
     end
 end
 
+-- Nampower only queues instant spells (totems are instant) when its NP_QueueInstantSpells
+-- setting is on. With it off, only the first totem of a set drops. Some Nampower settings
+-- addons turn it back off at every login, so instead of relying on it, the set cast turns
+-- it on for a moment and puts the player's own value back a few seconds later.
+local queueRestoreFrame = CreateFrame("Frame")
+queueRestoreFrame:Hide()  -- OnUpdate only runs while shown
+local queueRestoreTime = 0
+local queueRestoreValue = nil
+queueRestoreFrame:SetScript("OnUpdate", function()
+    if GetTime() >= queueRestoreTime then
+        this:Hide()
+        if queueRestoreValue then
+            SetCVar("NP_QueueInstantSpells", queueRestoreValue)
+            TotemNesia.DebugPrint("NP_QueueInstantSpells restored to " .. queueRestoreValue)
+            queueRestoreValue = nil
+        end
+    end
+end)
+
+local function EnsureInstantQueue()
+    local ok, value = pcall(GetCVar, "NP_QueueInstantSpells")
+    if ok and value and value ~= "1" then
+        queueRestoreValue = value
+        SetCVar("NP_QueueInstantSpells", "1")
+        queueRestoreTime = GetTime() + 3
+        queueRestoreFrame:Show()
+        TotemNesia.DebugPrint("NP_QueueInstantSpells was " .. value .. ", turned on for this totem set")
+    elseif queueRestoreValue then
+        -- Still on from an earlier press: keep it on a little longer
+        queueRestoreTime = GetTime() + 3
+    end
+end
+
 -- Sequential totem casting function
 function TotemNesia.CastNextTotem(setNumber)
     -- Safety checks
@@ -46,6 +79,7 @@ function TotemNesia.CastNextTotem(setNumber)
     
     -- NAMPOWER MODE: Cast all 4 totems instantly
     if TotemNesia.hasNampower then
+        EnsureInstantQueue()
         local castCount = 0
         
         -- Each cast goes through cleansing mode and fallback handling

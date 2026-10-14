@@ -778,6 +778,7 @@ function TNC.BuildOptionsUI()
     Check(COL_R, "Mute low mana alert", "manaAudioMuted")
     y = y - 26
     Check(COL_L, "Mute potion alert", "potionAudioMuted")
+    Check(COL_R, "Mute aggro alert", "aggroAudioMuted")
     y = y - 36
 
     Header("Mana Alerts")
@@ -787,10 +788,25 @@ function TNC.BuildOptionsUI()
         function(v) return "Potion Threshold: " .. v .. "%" end, RoundFive)
     Note("An alert plays when your mana drops below a threshold. Each alert has a 30 second cooldown and only fires when you cross below the line. Set a slider to 0% to turn that alert off.", 52)
 
-    Header("Chat")
-    Check(COL_L, "Disable public mana alert", "publicManaMuted")
+    Header("Aggro Alert")
+    Check(COL_L, "Aggro alert", "aggroAlert")
     y = y - 30
-    Note("When your mana drops below 15%, TotemNesia says \"I am low on mana, I need to drink.\" in /say so your group knows. 30 second cooldown.", 40)
+    Note("Shows \"You have aggro!\" on screen and plays the Aggro voice when a mob has been attacking you for a second. Only works in a group and in combat. It fires once when you pull aggro and won't repeat for 10 seconds.", 52)
+    Note("How it checks: twice a second it looks at your target, your pet's target, and every group member's target to see if one is on you. With SuperWoW it also checks every mob with a visible nameplate, which catches mobs nobody has targeted. Turn on enemy nameplates (V key) for that.", 66)
+
+    Header("Group Announcements")
+    Check(COL_L, "Announce in parties", "publicManaParty")
+    Check(COL_R, "Announce in raids", "publicManaRaid")
+    y = y - 26
+    Check(COL_L, "Announce aggro", "aggroAnnounce")
+    Check(COL_R, "Announce line of sight", "losAnnounce")
+    y = y - 30
+    Slider(0, 100, 5, "publicManaThreshold",
+        function(v) return "Low Mana Announcement: " .. v .. "%" end, RoundFive)
+    Note("Announcements go to party chat when you're in a party and raid chat when you're in a raid. Nothing is posted when you're solo, and nothing ever goes to /say.", 40)
+    Note("Low mana: \"I am low on mana, I need to drink.\" when your mana drops below the slider. 30 second cooldown. Set to 0% to turn it off.", 30)
+    Note("Aggro: \"I have aggro!\" along with the aggro alert above.", 18)
+    Note("Line of sight: \"<Name>, you are out of LoS for healing.\" when a spell fails because your target in the group is out of line of sight. At most once every 5 seconds per player.", 44)
     EndPage()
 
     -- ------------------------------------------------------------------
