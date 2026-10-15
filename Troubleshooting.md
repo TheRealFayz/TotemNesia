@@ -32,6 +32,12 @@ Type `/tn` to open the settings window, or `/tn bind` to start Key Bind Mode.
 
 ## Totem Bar
 
+**I can't assign a totem to a slot**
+- Hold Shift, mouse over the slot to open its flyout, then Shift + right-click the totem. Ctrl-click no longer assigns totems.
+
+**The water or earth slot casts a different totem than the one I picked**
+- A slot mode is on. Look for a P, D, or T on the icon. Right-click the slot until the letter is gone, or assign a totem to the slot, which turns its mode off.
+
 **An icon is red**
 - You're out of that totem's range. With SuperWoW this uses real distance. Without it, a totem turns red when its buff drops off you, so totems that give no buff (Searing, Magma, Grounding) never turn red this way.
 

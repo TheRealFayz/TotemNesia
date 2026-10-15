@@ -230,6 +230,7 @@ function TNC.BuildOptionsUI()
     local function MakeCheckbox(parent, point, x, y, text, dbKey, invert, onChange, labelLeft)
         local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
         cb:SetPoint(point, x, y)
+        cb.anchorPoint, cb.anchorX, cb.anchorY = point, x, y  -- for the pfUI style
         cb:SetWidth(24)
         cb:SetHeight(24)
         local label = cb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -595,7 +596,7 @@ function TNC.BuildOptionsUI()
     Note("Hold Shift and mouse over a slot to open its flyout (unless shift is disabled above).", 30)
     Note("Shift-click a flyout totem to cast it. Shift-right-click a flyout totem or weapon enchant to put it in the slot.", 30)
     Note("Alt-click a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown. Alt-click it again to clear.", 30)
-    Note("Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. Assigning a water totem turns it off.", 30)
+    Note("Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. Right-click the earth slot to toggle Tremor mode (T). Assigning a totem to the slot turns its mode off.", 44)
     Note("Click the shield slot, or use the Recast Shield keybind, to recast your shield.", 30)
     Note("A red icon means you're out of that totem's range. A blue icon means you don't have the mana to cast it.", 30)
     EndPage()
@@ -894,8 +895,30 @@ function TNC.BuildOptionsUI()
         end
 
         -- Controls
+        -- Checkboxes: pfUI's own SkinCheckbox puts its box on a separate frame that can
+        -- end up on top of the checkbox, hiding the check and blocking clicks. Instead the
+        -- border goes on the checkbox itself, which always draws under its check mark.
         for _, cb in ipairs(checkboxes) do
-            Try(api.SkinCheckbox, cb)
+            cb:SetNormalTexture("")
+            cb:SetPushedTexture("")
+            cb:SetHighlightTexture("")
+            Try(api.CreateBackdrop, cb, nil, true)
+            -- Shrink the 24px button to a 16px box, keeping it centered where it was
+            local p, cx, cy = cb.anchorPoint, cb.anchorX, cb.anchorY
+            if string.find(p, "LEFT") then
+                cx = cx + 4
+            elseif string.find(p, "RIGHT") then
+                cx = cx - 4
+            end
+            if string.find(p, "TOP") then
+                cy = cy - 4
+            elseif string.find(p, "BOTTOM") then
+                cy = cy + 4
+            end
+            cb:SetWidth(16)
+            cb:SetHeight(16)
+            cb:ClearAllPoints()
+            cb:SetPoint(p, cx, cy)
         end
         for _, slider in ipairs(sliders) do
             Try(api.SkinSlider, slider)

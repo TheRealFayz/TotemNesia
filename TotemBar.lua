@@ -165,7 +165,7 @@ for i, element in ipairs(elementOrder) do
     fallbackBadge:Hide()
     slot.fallbackBadge = fallbackBadge
     
-    -- Mode letter (P / D for Anti-Poison / Anti-Disease on the water slot)
+    -- Mode letter (P / D for Anti-Poison / Anti-Disease on the water slot, T for Tremor on earth)
     local modeText = slot:CreateFontString(nil, "OVERLAY")
     modeText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
     modeText:SetPoint("LEFT", slot, "LEFT", 2, 0)
@@ -290,11 +290,14 @@ for i, element in ipairs(elementOrder) do
                 -- assign this totem or weapon enchant to the slot
                 local elem = this.element
                 TotemNesiaDB.totemBarSlots[elem] = this.totemName
-                -- Picking a water totem turns cleansing mode off, otherwise the
-                -- P/D mode would keep covering the totem you just chose
+                -- Picking a water or earth totem turns that slot's mode off, otherwise
+                -- the P/D/T mode would keep covering the totem you just chose
                 if elem == "water" and TotemNesiaDB.cleansingMode then
                     TotemNesiaDB.cleansingMode = nil
                     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Cleansing mode off")
+                elseif elem == "earth" and TotemNesiaDB.tremorMode then
+                    TotemNesiaDB.tremorMode = nil
+                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode off")
                 end
                 local slotBtn = TotemNesia.totemBarSlots[elem]
                 if slotBtn then
@@ -418,10 +421,15 @@ for i, element in ipairs(elementOrder) do
         slot:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         slot:SetScript("OnClick", function()
             if arg1 == "RightButton" then
-                -- Right-click on the water slot cycles Off -> Anti-Poison -> Anti-Disease -> Off.
+                -- Right-click on the water slot cycles Off -> Anti-Poison -> Anti-Disease -> Off,
+                -- and on the earth slot toggles Tremor mode.
                 -- Not with Shift held: that's the flyout assign click landing on the slot.
-                if this.element == "water" and not IsShiftKeyDown() then
-                    TotemNesia.CycleCleansingMode()
+                if not IsShiftKeyDown() then
+                    if this.element == "water" then
+                        TotemNesia.CycleCleansingMode()
+                    elseif this.element == "earth" then
+                        TotemNesia.ToggleTremorMode()
+                    end
                 end
                 return
             end
@@ -655,21 +663,17 @@ function TotemNesia.UpdateTotemBar()
                 slot.selectedTotem = savedTotem
             end
             
-            -- Icon shows what a click will cast (cleansing mode can swap the water slot)
-            local displayTotem = slot.selectedTotem
-            if element == "water" and TotemNesiaDB.cleansingMode then
-                local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-                if cleansing and TotemNesia.IsTotemLearned(cleansing) then
-                    displayTotem = cleansing
-                end
-            end
+            -- Icon shows what a click will cast (a slot mode can swap the water or earth slot)
+            local displayTotem = TNC.GetModeTotem(element) or slot.selectedTotem
             
-            -- Mode letter on the water slot
+            -- Mode letter on the water and earth slots
             if slot.modeText then
                 if element == "water" and TotemNesiaDB.cleansingMode == "poison" then
                     slot.modeText:SetText("P")
                 elseif element == "water" and TotemNesiaDB.cleansingMode == "disease" then
                     slot.modeText:SetText("D")
+                elseif element == "earth" and TotemNesiaDB.tremorMode then
+                    slot.modeText:SetText("T")
                 else
                     slot.modeText:SetText("")
                 end
@@ -751,6 +755,20 @@ function TotemNesia.UpdateTotemBar()
             end
         end
     end
+end
+
+-- Toggle Tremor mode on the earth slot (only turns on once Tremor Totem is learned)
+function TotemNesia.ToggleTremorMode()
+    if TotemNesiaDB.tremorMode then
+        TotemNesiaDB.tremorMode = nil
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode off")
+    elseif TotemNesia.IsTotemLearned(TNC.TREMOR) then
+        TotemNesiaDB.tremorMode = true
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode on (earth slot casts Tremor Totem)")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode needs Tremor Totem learned")
+    end
+    TotemNesia.UpdateTotemBar()
 end
 
 -- Cycle the water slot between Off, Anti-Poison, and Anti-Disease (skips unlearned totems)

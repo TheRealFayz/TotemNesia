@@ -20,9 +20,11 @@ TotemNesia tracks your totems, gives you a quick-cast totem bar, and reminds you
 ### Totem Bar
 A 6-slot quick-cast bar: Fire, Earth, Water, and Air totems, plus a weapon enchant slot and a shield slot.
 - **Flyouts** - Hold Shift and mouse over a slot to pick from every totem or enchant for it
-- **Click** a flyout totem to cast it, or **right-click** it to assign it to the slot
+- **Click** a flyout totem to cast it, or **Shift + right-click** it to assign it to the slot
 - **Alt-click** a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown
-- **Cleansing mode** - Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. While a mode is on, the water slot casts Poison or Disease Cleansing Totem instead of your assigned totem and shows a P or D on the icon. Assigning a water totem turns it off.
+- **Slot modes** - Quick swaps for when a fight calls for a cleansing or Tremor totem. While a mode is on, the slot casts that totem instead of your assigned one and shows a letter on the icon. Assigning a totem to the slot turns its mode off.
+  - **Water slot:** right-click to cycle Anti-Poison (P), Anti-Disease (D), and off
+  - **Earth slot:** right-click to turn Tremor mode (T) on or off
 - **Weapon slot** - Click to reapply your assigned enchant. Greys out when your weapon has no enchant.
 - **Shield slot** - Click to recast your shield. Shows charges left and can flash when you're low.
 - **Timers** on every slot, and a slot with no assigned totem shows the one you have out
@@ -40,6 +42,7 @@ A 6-slot quick-cast bar: Fire, Earth, Water, and Air totems, plus a weapon encha
 - **With Nampower:** one press drops the whole set
 - **Without Nampower:** each press drops the next totem in the set (Fire, Earth, Water, Air)
 - Totems that are already down with more than 10 seconds left are skipped, so pressing again only replaces what's missing, expiring, or left behind
+- Slot modes on the totem bar apply to sets too, so a set drops Tremor or a cleansing totem while that mode is on
 
 <img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/1%20button%20totems.gif?raw=true">
 
@@ -66,7 +69,7 @@ A small bar that shows every active totem with its timer. It can be moved, locke
 Click the minimap button or type `/tn` to open the settings window (right-click and drag to move the button). `/tn bind` starts Key Bind Mode.
 
 - **General** - Recall notification, totem tracker, totem range, which group types the addon runs in, debug mode, and appearance
-- **Totem Bar** - Slots, layout, flyout direction, and scale
+- **Totem Bar** - Slots, layout, flyout direction, scale, key bindings, and a how-to-use guide
 - **Totem Sets** - Build your 5 sets
 - **Alerts** - Voice, alert sounds, mana thresholds, aggro alert, and group announcements
 

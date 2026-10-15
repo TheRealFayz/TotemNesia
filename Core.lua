@@ -66,6 +66,27 @@ TNC.CLEANSING = {
     disease = "Disease Cleansing Totem"
 }
 
+-- Tremor mode swaps the earth slot to this
+TNC.TREMOR = "Tremor Totem"
+
+-- The totem a slot mode puts in place of the slot's totem, or nil when no mode is on:
+-- Anti-Poison / Anti-Disease on the water slot, Tremor on the earth slot
+function TNC.GetModeTotem(element)
+    if not TotemNesiaDB then
+        return nil
+    end
+    local modeTotem = nil
+    if element == "water" and TotemNesiaDB.cleansingMode then
+        modeTotem = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
+    elseif element == "earth" and TotemNesiaDB.tremorMode then
+        modeTotem = TNC.TREMOR
+    end
+    if modeTotem and TotemNesia.IsTotemLearned(modeTotem) then
+        return modeTotem
+    end
+    return nil
+end
+
 -- Weapon imbues as the server may name them on the weapon tooltip ("Windfury 4 (5 min)")
 TNC.WEAPON_IMBUES = {
     {base = "Rockbiter", spell = "Rockbiter Weapon"},
@@ -410,7 +431,7 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.shieldFlash == nil then
         TotemNesiaDB.shieldFlash = true
     end
-    -- cleansingMode (nil / "poison" / "disease") and shieldSpell default to nil
+    -- cleansingMode (nil / "poison" / "disease"), tremorMode, and shieldSpell default to nil
 end
 
 -- Debug print function
@@ -827,14 +848,8 @@ local function IsTotemFresh(totemName)
 end
 
 function TotemNesia.ShouldSkipSetTotem(element, totemName)
-    -- The set's totem after the water slot's cleansing mode swap
-    local primary = totemName
-    if element == "water" and TotemNesiaDB and TotemNesiaDB.cleansingMode then
-        local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-        if cleansing and TotemNesia.IsTotemLearned(cleansing) then
-            primary = cleansing
-        end
-    end
+    -- The set's totem after a slot mode swap (cleansing on water, Tremor on earth)
+    local primary = TNC.GetModeTotem(element) or totemName
     if IsTotemFresh(primary) then
         return true
     end
@@ -911,16 +926,12 @@ function TotemNesia.IsSpellOnCooldown(spellName)
 end
 
 -- Work out which totem should actually be cast for an element:
--- 1. Anti-Poison / Anti-Disease mode replaces the water totem with a cleansing totem
+-- 1. Anti-Poison / Anti-Disease mode replaces the water totem with a cleansing totem,
+--    and Tremor mode replaces the earth totem with Tremor Totem
 -- 2. If that totem is on cooldown and the element has a fallback, use the fallback
 -- Returns totemName, usedFallback
 function TotemNesia.ResolveTotemForElement(element, totemName)
-    if element == "water" and TotemNesiaDB and TotemNesiaDB.cleansingMode then
-        local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-        if cleansing and TotemNesia.IsTotemLearned(cleansing) then
-            totemName = cleansing
-        end
-    end
+    totemName = TNC.GetModeTotem(element) or totemName
     if totemName and totemName ~= "" and TotemNesia.IsSpellOnCooldown(totemName) then
         local fallbacks = TotemNesiaDB and TotemNesiaDB.totemBarFallbacks
         local fallback = fallbacks and fallbacks[element]
@@ -931,7 +942,7 @@ function TotemNesia.ResolveTotemForElement(element, totemName)
     return totemName, false
 end
 
--- Cast the right totem for an element (applies cleansing mode and fallbacks)
+-- Cast the right totem for an element (applies slot modes and fallbacks)
 -- queue = true is used when several totems are cast from one keypress (Nampower).
 -- Those casts go through CastSpell with the spellbook index, the same path as action
 -- bar buttons, which Nampower queues so every totem lands. CastSpellByName and
