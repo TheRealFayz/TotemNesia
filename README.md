@@ -63,7 +63,7 @@ A small bar that shows every active totem with its timer. It can be moved, locke
 
 ## Settings and Keybinds
 
-Click the minimap button to open the settings window (right-click and drag to move the button).
+Click the minimap button or type `/tn` to open the settings window (right-click and drag to move the button). `/tn bind` starts Key Bind Mode.
 
 - **General** - Recall notification, totem tracker, totem range, which group types the addon runs in, debug mode, and appearance
 - **Totem Bar** - Slots, layout, flyout direction, and scale
@@ -88,7 +88,7 @@ To add a voice, put four files in `Sounds` named `Totems - Name.mp3`, `Low Mana 
 
 ## Feedback
 
-Found a bug or have a feature request? Please open an issue on GitHub.
+Something not working? Check [Troubleshooting.md](Troubleshooting.md) first. Found a bug or have a feature request? Please open an issue on GitHub.
 
 This addon is provided as-is for use with OctoWoW. If you'd like to edit or fork it, feel free to reach out.
 

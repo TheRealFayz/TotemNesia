@@ -1,6 +1,6 @@
 -- TotemNesia: Setup, saved settings, spellbook cache, and shared helpers
 -- (TotemNesia automatically recalls totems after leaving combat and manages them in play)
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 -- Version 1.17
 
 -- ============================================================================
@@ -21,20 +21,10 @@ DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Shaman detected, addon enabled.")
 -- KEYBIND STRINGS
 -- ============================================================================
 
--- Header for keybindings menu
+-- Header for keybindings menu. The bindings themselves are named in Bindings.xml with
+-- their display text ("Totem Set 1" and so on), so they need no BINDING_NAME_ strings.
+-- Those names must not change, or players would lose the keys they've bound.
 BINDING_HEADER_TOTEM_NESIA = "TotemNesia"
-
--- Individual keybind descriptions
-BINDING_NAME_TOTEM_SET_1 = "Totem Set 1"
-BINDING_NAME_TOTEM_SET_2 = "Totem Set 2"
-BINDING_NAME_TOTEM_SET_3 = "Totem Set 3"
-BINDING_NAME_TOTEM_SET_4 = "Totem Set 4"
-BINDING_NAME_TOTEM_SET_5 = "Totem Set 5"
-BINDING_NAME_TOTEM_BAR_1 = "Totem Bar 1 (Fire)"
-BINDING_NAME_TOTEM_BAR_2 = "Totem Bar 2 (Earth)"
-BINDING_NAME_TOTEM_BAR_3 = "Totem Bar 3 (Water)"
-BINDING_NAME_TOTEM_BAR_4 = "Totem Bar 4 (Air)"
-BINDING_NAME_TOTEM_SHIELD = "Recast Shield"
 
 -- ============================================================================
 -- CONSTANTS
@@ -239,7 +229,7 @@ function TotemNesia.RefreshTotemSetIcons()
     local refreshCount = 0
     for _, iconData in ipairs(TotemNesia.totemIcons) do
         if iconData and iconData.iconTexture and iconData.totemName then
-            local texture = GetTotemIcon(iconData.totemName)
+            local texture = TotemNesia.GetTotemIcon(iconData.totemName)
             iconData.iconTexture:SetTexture(texture)
             refreshCount = refreshCount + 1
         end
@@ -430,7 +420,7 @@ function TotemNesia.DebugPrint(msg)
     end
 end
 
--- Voice actors for the audio alerts (picked in the Settings tab). Each one needs three files
+-- Voice actors for the audio alerts (picked on the Alerts tab). Each one needs four files
 -- in Sounds: "Totems - <name>.mp3", "Low Mana - <name>.mp3", "Mana Potion - <name>.mp3",
 -- and "Aggro - <name>.mp3".
 -- To add a voice, add the files and put the name in this list.
@@ -481,7 +471,7 @@ function TotemNesia.IsAddonEnabled()
 end
 
 -- Function to get totem/weapon enchant icon texture
-function GetTotemIcon(totemName)
+function TotemNesia.GetTotemIcon(totemName)
     local info = TotemNesia.GetCachedSpell(totemName)
     if info and info.texture then
         return info.texture
@@ -490,7 +480,7 @@ function GetTotemIcon(totemName)
 end
 
 -- Check if a totem/spell is learned
-function IsTotemLearned(totemName)
+function TotemNesia.IsTotemLearned(totemName)
     if TotemNesia.GetCachedSpell(totemName) then
         return true
     end
@@ -519,6 +509,7 @@ local totemDurations = {
     ["Fire Resistance Totem"] = 120,
     ["Mana Spring Totem"] = 60,
     ["Healing Stream Totem"] = 60,
+    ["Mana Tide Totem"] = 12,
     
     -- Air Totems
     ["Windwall Totem"] = 120,
@@ -840,7 +831,7 @@ function TotemNesia.ShouldSkipSetTotem(element, totemName)
     local primary = totemName
     if element == "water" and TotemNesiaDB and TotemNesiaDB.cleansingMode then
         local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-        if cleansing and IsTotemLearned(cleansing) then
+        if cleansing and TotemNesia.IsTotemLearned(cleansing) then
             primary = cleansing
         end
     end
@@ -926,14 +917,14 @@ end
 function TotemNesia.ResolveTotemForElement(element, totemName)
     if element == "water" and TotemNesiaDB and TotemNesiaDB.cleansingMode then
         local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-        if cleansing and IsTotemLearned(cleansing) then
+        if cleansing and TotemNesia.IsTotemLearned(cleansing) then
             totemName = cleansing
         end
     end
     if totemName and totemName ~= "" and TotemNesia.IsSpellOnCooldown(totemName) then
         local fallbacks = TotemNesiaDB and TotemNesiaDB.totemBarFallbacks
         local fallback = fallbacks and fallbacks[element]
-        if fallback and fallback ~= totemName and IsTotemLearned(fallback) and not TotemNesia.IsSpellOnCooldown(fallback) then
+        if fallback and fallback ~= totemName and TotemNesia.IsTotemLearned(fallback) and not TotemNesia.IsSpellOnCooldown(fallback) then
             return fallback, true
         end
     end
@@ -1130,11 +1121,11 @@ end
 
 -- Shield the shield slot should cast: the one picked from the flyout, otherwise the first learned
 function TotemNesia.GetChosenShield()
-    if TotemNesiaDB and TotemNesiaDB.shieldSpell and IsTotemLearned(TotemNesiaDB.shieldSpell) then
+    if TotemNesiaDB and TotemNesiaDB.shieldSpell and TotemNesia.IsTotemLearned(TotemNesiaDB.shieldSpell) then
         return TotemNesiaDB.shieldSpell
     end
     for _, shieldName in ipairs(TNC.SHIELD_SPELLS) do
-        if IsTotemLearned(shieldName) then
+        if TotemNesia.IsTotemLearned(shieldName) then
             return shieldName
         end
     end

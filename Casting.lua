@@ -1,5 +1,5 @@
 -- TotemNesia: Keybind and macro functions: recall, totem sets, totem bar slots, shield
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 
 -- Core.lua stops loading on non-Shamans, so every other file stops too
 if not TotemNesia or not TotemNesia.shared then

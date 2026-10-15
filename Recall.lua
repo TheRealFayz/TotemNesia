@@ -1,5 +1,5 @@
 -- TotemNesia: Recall notification icon, element corner icons, and the distance check
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 
 -- Core.lua stops loading on non-Shamans, so every other file stops too
 if not TotemNesia or not TotemNesia.shared then
@@ -158,7 +158,7 @@ function TotemNesia.UpdateElementalIndicators()
     for element, totemName in pairs(activeElements) do
         if totemName then
             local icon = TotemNesia.elementalIcons[element]
-            local texture = GetTotemIcon(totemName)
+            local texture = TotemNesia.GetTotemIcon(totemName)
             TNC.SetIcon(icon.texture, texture)
             icon:Show()
         end

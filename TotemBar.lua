@@ -1,5 +1,5 @@
 -- TotemNesia: Totem bar, flyouts, shield and weapon slots, and the totem tracker
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 
 -- Core.lua stops loading on non-Shamans, so every other file stops too
 if not TotemNesia or not TotemNesia.shared then
@@ -26,7 +26,7 @@ TotemNesia.totemLists = {
         "Magma Totem",
         "Frost Resistance Totem",
         "Flametongue Totem"
-        -- Totem of Wrath removed (doesn't exist on Turtle WoW)
+        -- No Totem of Wrath (that's a later expansion)
     },
     earth = {
         "Stoneclaw Totem",
@@ -40,8 +40,8 @@ TotemNesia.totemLists = {
         "Mana Spring Totem",
         "Fire Resistance Totem",
         "Disease Cleansing Totem",
-        "Poison Cleansing Totem"
-        -- Mana Tide Totem removed (doesn't exist on Turtle WoW)
+        "Poison Cleansing Totem",
+        "Mana Tide Totem"  -- Restoration talent; hidden in the flyout unless learned
     },
     air = {
         "Grounding Totem",
@@ -235,7 +235,7 @@ for i, element in ipairs(elementOrder) do
         -- Totem icon
         local btnIcon = button:CreateTexture(nil, "ARTWORK")
         btnIcon:SetAllPoints(button)
-        btnIcon:SetTexture(GetTotemIcon(totemName))
+        btnIcon:SetTexture(TotemNesia.GetTotemIcon(totemName))
         btnIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         
         button.totemName = totemName
@@ -369,7 +369,7 @@ for i, element in ipairs(elementOrder) do
     end)
     
     -- Update handler that always runs to check hide timer
-    flyout:SetScript("OnUpdate", function(elapsed)
+    flyout:SetScript("OnUpdate", function()
         -- Always check if we should hide, regardless of timer
         local shouldBeVisible = MouseIsOver(flyout) or MouseIsOver(slot)
         
@@ -453,7 +453,7 @@ function TotemNesia.UpdateTotemBarKeybinds()
         local slot = TotemNesia.totemBarSlots[element]
         if slot and slot.keybindText then
             -- Get the first key bound to this action (using exact display name from Bindings.xml)
-            local key1, key2 = GetBindingKey(bindingName)
+            local key1 = GetBindingKey(bindingName)
             local keyText = ""
             
             if key1 then
@@ -561,7 +561,7 @@ function TotemNesia.UpdateTotemBar()
             -- Weapon slot: show the imbue actually on the weapon, or the last one clicked
             local shownEnchant = TotemNesia.detectedWeaponEnchant or TotemNesia.clickedWeaponEnchant
             if TotemNesia.weaponEnchantTime > 0 and TotemNesia.weaponEnchantExpiry and shownEnchant then
-                local enchantIcon = GetTotemIcon(shownEnchant)
+                local enchantIcon = TotemNesia.GetTotemIcon(shownEnchant)
                 if not TotemNesia.lastWeaponIconState or TotemNesia.lastWeaponIconState ~= shownEnchant then
                     TotemNesia.DebugPrint("Setting weapon icon to: " .. shownEnchant .. " (" .. tostring(enchantIcon) .. ")")
                     TotemNesia.lastWeaponIconState = shownEnchant
@@ -576,7 +576,7 @@ function TotemNesia.UpdateTotemBar()
                 end
                 if slot.selectedTotem then
                     -- No imbue on the weapon: show the assigned enchant dimmed, like a missing shield
-                    TNC.SetIcon(slot.iconTexture, GetTotemIcon(slot.selectedTotem))
+                    TNC.SetIcon(slot.iconTexture, TotemNesia.GetTotemIcon(slot.selectedTotem))
                     slot.iconTexture:SetAlpha(1)
                     slot.iconTexture:SetVertexColor(0.4, 0.4, 0.4)
                 else
@@ -613,7 +613,7 @@ function TotemNesia.UpdateTotemBar()
             local activeShield, charges = TotemNesia.GetActiveShield()
             slot.shieldLow = false
             if chosen then
-                TNC.SetIcon(slot.iconTexture, GetTotemIcon(activeShield or chosen))
+                TNC.SetIcon(slot.iconTexture, TotemNesia.GetTotemIcon(activeShield or chosen))
                 slot.iconTexture:SetAlpha(1)
                 if activeShield then
                     slot.iconTexture:SetVertexColor(1, 1, 1)
@@ -651,7 +651,7 @@ function TotemNesia.UpdateTotemBar()
             local displayTotem = slot.selectedTotem
             if element == "water" and TotemNesiaDB.cleansingMode then
                 local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-                if cleansing and IsTotemLearned(cleansing) then
+                if cleansing and TotemNesia.IsTotemLearned(cleansing) then
                     displayTotem = cleansing
                 end
             end
@@ -670,8 +670,8 @@ function TotemNesia.UpdateTotemBar()
             -- Fallback badge
             if slot.fallbackBadge then
                 local fallback = TotemNesiaDB.totemBarFallbacks and TotemNesiaDB.totemBarFallbacks[element]
-                if fallback and IsTotemLearned(fallback) then
-                    TNC.SetIcon(slot.fallbackBadge, GetTotemIcon(fallback))
+                if fallback and TotemNesia.IsTotemLearned(fallback) then
+                    TNC.SetIcon(slot.fallbackBadge, TotemNesia.GetTotemIcon(fallback))
                     slot.fallbackBadge:Show()
                 else
                     slot.fallbackBadge:Hide()
@@ -711,7 +711,7 @@ function TotemNesia.UpdateTotemBar()
             -- that is currently out so the timer always has an icon next to it.
             local iconTotem = displayTotem or slot.activeTotem
             if iconTotem then
-                TNC.SetIcon(slot.iconTexture, GetTotemIcon(iconTotem))
+                TNC.SetIcon(slot.iconTexture, TotemNesia.GetTotemIcon(iconTotem))
                 slot.iconTexture:SetAlpha(1)
             else
                 TNC.SetIcon(slot.iconTexture, nil)
@@ -750,13 +750,13 @@ function TotemNesia.CycleCleansingMode()
     local current = TotemNesiaDB.cleansingMode
     local nextMode = nil
     if current == nil then
-        if IsTotemLearned(TNC.CLEANSING.poison) then
+        if TotemNesia.IsTotemLearned(TNC.CLEANSING.poison) then
             nextMode = "poison"
-        elseif IsTotemLearned(TNC.CLEANSING.disease) then
+        elseif TotemNesia.IsTotemLearned(TNC.CLEANSING.disease) then
             nextMode = "disease"
         end
     elseif current == "poison" then
-        if IsTotemLearned(TNC.CLEANSING.disease) then
+        if TotemNesia.IsTotemLearned(TNC.CLEANSING.disease) then
             nextMode = "disease"
         end
     end
@@ -837,7 +837,7 @@ function TotemNesia.UpdateTotemBarFlyouts()
             local children = {flyout:GetChildren()}
             for _, button in ipairs(children) do
                 if button.totemName then
-                    if IsTotemLearned(button.totemName) then
+                    if TotemNesia.IsTotemLearned(button.totemName) then
                         button:Show()
                         button:ClearAllPoints()
                         local offset = iconSpacing + (visibleCount * (iconSize + iconSpacing))
@@ -908,7 +908,7 @@ function TotemNesia.RefreshFlyoutIcons()
             local children = {slot.flyout:GetChildren()}
             for _, child in ipairs(children) do
                 if child.totemName and child.iconTexture then
-                    child.iconTexture:SetTexture(GetTotemIcon(child.totemName))
+                    child.iconTexture:SetTexture(TotemNesia.GetTotemIcon(child.totemName))
                 end
             end
         end
@@ -999,7 +999,7 @@ function TotemNesia.UpdateTotemTracker()
         
         -- ALWAYS refresh the texture (fixes blank icons if spellbook wasn't loaded initially)
         if icon.texture then
-            local totemTexture = GetTotemIcon(totemName)
+            local totemTexture = TotemNesia.GetTotemIcon(totemName)
             if totemTexture then
                 TNC.SetIcon(icon.texture, totemTexture)
             else

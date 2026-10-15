@@ -1,5 +1,5 @@
 -- TotemNesia: Minimap button and the options window
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 
 -- Core.lua stops loading on non-Shamans, so every other file stops too
 if not TotemNesia or not TotemNesia.shared then
@@ -461,41 +461,14 @@ function TNC.BuildOptionsUI()
     Check(255, "Raids", "enabledRaid")
     y = y - 36
 
-    Header("Keybinds and Macro")
-    Note("Set keybinds in ESC > Key Bindings > TotemNesia. Recall macro (click to select, then Ctrl-C):", 30)
-    local RECALL_MACRO = "/script TotemNesia_RecallTotems()"
-    local macroBox = CreateFrame("EditBox", nil, pg)
-    macroBox:SetPoint("TOPLEFT", COL_L + 4, y)
-    macroBox:SetWidth(330)
-    macroBox:SetHeight(20)
-    macroBox:SetFontObject(GameFontHighlightSmall)
-    macroBox:SetText(RECALL_MACRO)
-    macroBox:SetAutoFocus(false)
-    macroBox:SetScript("OnEditFocusGained", function() this:HighlightText() end)
-    macroBox:SetScript("OnEscapePressed", function() this:ClearFocus() end)
-    macroBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
-    macroBox:SetScript("OnChar", function()
-        -- Block all character input
-        this:SetText(RECALL_MACRO)
-        this:HighlightText()
-    end)
-    macroBox:SetScript("OnTextChanged", function()
-        -- Restore text if it gets changed
-        if this:GetText() ~= RECALL_MACRO then
-            this:SetText(RECALL_MACRO)
-            this:HighlightText()
-        end
-    end)
-    y = y - 28
-    Check(COL_L, "Debug mode", "debugMode")
-    y = y - 30
-
-    Header("Appearance")
+    Header("Appearance and Debug")
     Check(COL_L, "Match pfUI style (when pfUI is installed)", "pfuiSkin")
     y = y - 26
     Check(COL_L, "Also style the bars and recall notification", "pfuiSkinBars")
     y = y - 26
     Note("Gives this window, and optionally the totem bar, tracker, and recall notification, pfUI's look. Changes take effect after a /reload.", 30)
+    Check(COL_L, "Debug mode", "debugMode")
+    y = y - 30
     EndPage()
 
     -- ==================================================================
@@ -590,6 +563,32 @@ function TNC.BuildOptionsUI()
     end)
     y = y - 32
     Note("Hover a totem bar slot and press a key to bind it. Esc over a slot clears its key. Press Esc anywhere else to finish.", 30)
+    Note("Totem Sets, the Totem Bar slots, and Recast Shield can also be bound in ESC > Key Bindings > TotemNesia.", 30)
+    Note("To recall totems with a key, put this in a macro (click to select, then Ctrl-C):", 18)
+    local RECALL_MACRO = "/script TotemNesia_RecallTotems()"
+    local macroBox = CreateFrame("EditBox", nil, pg)
+    macroBox:SetPoint("TOPLEFT", COL_L + 4, y)
+    macroBox:SetWidth(330)
+    macroBox:SetHeight(20)
+    macroBox:SetFontObject(GameFontHighlightSmall)
+    macroBox:SetText(RECALL_MACRO)
+    macroBox:SetAutoFocus(false)
+    macroBox:SetScript("OnEditFocusGained", function() this:HighlightText() end)
+    macroBox:SetScript("OnEscapePressed", function() this:ClearFocus() end)
+    macroBox:SetScript("OnEnterPressed", function() this:ClearFocus() end)
+    macroBox:SetScript("OnChar", function()
+        -- Block all character input
+        this:SetText(RECALL_MACRO)
+        this:HighlightText()
+    end)
+    macroBox:SetScript("OnTextChanged", function()
+        -- Restore text if it gets changed
+        if this:GetText() ~= RECALL_MACRO then
+            this:SetText(RECALL_MACRO)
+            this:HighlightText()
+        end
+    end)
+    y = y - 28
     y = y - 6
 
     Header("How to Use")
@@ -730,7 +729,7 @@ function TNC.BuildOptionsUI()
 
             local icon = btn:CreateTexture(nil, "ARTWORK")
             icon:SetAllPoints(btn)
-            icon:SetTexture(GetTotemIcon(totemName))
+            icon:SetTexture(TotemNesia.GetTotemIcon(totemName))
             icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
             table.insert(TotemNesia.totemIcons, {iconTexture = icon, totemName = totemName})
 
@@ -755,6 +754,10 @@ function TNC.BuildOptionsUI()
         end
         y = y - 36
     end
+
+    Header("How Sets Cast")
+    Note("With Nampower, one press drops every totem in the set. Without Nampower, each press drops the next totem (Fire, Earth, Water, Air).", 30)
+    Note("Totems that are already down with more than 10 seconds left, and that you're still in range of, are skipped. So pressing again only replaces what's missing, expiring, or left behind.", 44)
     EndPage()
 
     -- ==================================================================
@@ -821,8 +824,7 @@ function TNC.BuildOptionsUI()
     Header("Aggro Alert")
     Check(COL_L, "Aggro alert", "aggroAlert")
     y = y - 30
-    Note("Shows \"You have aggro!\" on screen and plays the Aggro voice when a mob has been attacking you for a second. Only works in a group and in combat. It fires once when you pull aggro and won't repeat for 10 seconds.", 52)
-    Note("How it checks: twice a second it looks at your target, your pet's target, and every group member's target to see if one is on you. With SuperWoW it also checks every mob with a visible nameplate, which catches mobs nobody has targeted. Turn on enemy nameplates (V key) for that.", 66)
+    Note("\"You have aggro!\" on screen plus the Aggro voice when a mob stays on you for a second, in a group and in combat. Checks your group's targets, and with SuperWoW every visible nameplate (turn on enemy nameplates with V).", 52)
 
     Header("Group Announcements")
     Check(COL_L, "Announce in parties", "publicManaParty")
@@ -835,10 +837,7 @@ function TNC.BuildOptionsUI()
     y = y - 30
     Slider(0, 100, 5, "publicManaThreshold",
         function(v) return "Low Mana Announcement: " .. v .. "%" end, RoundFive)
-    Note("Announcements go to party chat when you're in a party and raid chat when you're in a raid. Nothing is posted when you're solo, and nothing ever goes to /say.", 40)
-    Note("Low mana: \"I am low on mana, I need to drink.\" when your mana drops below the slider. 30 second cooldown.", 30)
-    Note("Aggro: \"I have aggro!\" along with the aggro alert above. At most once every 20 seconds, and the timer resets when you leave combat.", 30)
-    Note("Line of sight: \"<Name>, you are out of LoS for healing.\" when a spell fails because your target in the group is out of line of sight. At most once every 5 seconds per player.", 44)
+    Note("Posted to party or raid chat, never /say, and never when solo. Low mana: \"I am low on mana, I need to drink.\" Aggro: \"I have aggro!\" (at most every 20s). Line of sight: \"<Name>, you are out of LoS for healing.\" (at most every 5s per player).", 66)
     EndPage()
 
     -- ------------------------------------------------------------------
@@ -848,7 +847,7 @@ function TNC.BuildOptionsUI()
     -- pfUI skin: when pfUI is installed, restyle this window with pfUI's own skinning
     -- functions so it matches the rest of the player's interface. Runs once, the first
     -- time the window opens (by then pfUI has always finished loading). The totem bar,
-    -- tracker, and recall notification are left alone.
+    -- tracker, and recall notification have their own skin at the end of TotemBar.lua.
     -- ------------------------------------------------------------------
     function ui.ApplyPfUISkin()
         if ui.pfSkinned or not TotemNesiaDB.pfuiSkin then
@@ -961,15 +960,37 @@ minimapButton:SetScript("OnLeave", function()
     GameTooltip:Hide()
 end)
 
--- Click to open options menu (every control is refreshed from saved settings first)
-minimapButton:SetScript("OnClick", function()
+-- Open or close the options window (every control is refreshed from saved settings first)
+function TotemNesia.ToggleOptions()
     if optionsMenu:IsVisible() then
         optionsMenu:Hide()
     else
         TNC.ui.RefreshAll()
         optionsMenu:Show()
     end
+end
+
+-- Click to open options menu
+minimapButton:SetScript("OnClick", function()
+    TotemNesia.ToggleOptions()
 end)
+
+-- Slash commands: /tn or /totemnesia opens the settings, /tn bind starts Key Bind Mode
+SLASH_TOTEMNESIA1 = "/tn"
+SLASH_TOTEMNESIA2 = "/totemnesia"
+SlashCmdList["TOTEMNESIA"] = function(msg)
+    local command = string.lower(msg or "")
+    if command == "bind" then
+        if optionsMenu:IsVisible() then
+            optionsMenu:Hide()
+        end
+        TotemNesia.ToggleBindMode()
+    elseif command == "help" then
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: /tn opens the settings, /tn bind starts Key Bind Mode")
+    else
+        TotemNesia.ToggleOptions()
+    end
+end
 
 -- Dragging around minimap (right-click)
 minimapButton:RegisterForDrag("RightButton")

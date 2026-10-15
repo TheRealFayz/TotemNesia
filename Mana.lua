@@ -1,5 +1,5 @@
 -- TotemNesia: Mana alerts
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 
 -- Core.lua stops loading on non-Shamans, so every other file stops too
 if not TotemNesia or not TotemNesia.shared then
@@ -26,7 +26,7 @@ function TotemNesia.CheckManaAlerts()
     end
     local manaPercent = (UnitMana("player") / maxMana) * 100
     
-    -- Low mana alert (threshold from the Mana tab, 0 turns it off)
+    -- Low mana alert (threshold from the Alerts tab, 0 turns it off)
     local manaThreshold = TotemNesiaDB.manaThreshold or 0
     if manaThreshold > 0 then
         if manaPercent < manaThreshold and not TotemNesia.belowThreshold then
@@ -42,7 +42,7 @@ function TotemNesia.CheckManaAlerts()
         end
     end
     
-    -- Potion alert (threshold from the Mana tab's Potion Alert slider, 0 turns it off)
+    -- Potion alert (threshold from the Alerts tab's Potion Threshold slider, 0 turns it off)
     local potionThreshold = TotemNesiaDB.potionThreshold or 0
     if potionThreshold > 0 then
         if manaPercent < potionThreshold and not TotemNesia.belowPotionThreshold then

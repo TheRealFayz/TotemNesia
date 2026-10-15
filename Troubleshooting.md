@@ -1,128 +1,65 @@
-### Debug Mode
-Enable debug mode in the options menu to see detailed information about:
-- When individual totems are summoned
-- When totems fade or die
-- Combat state changes
-- Totem recall events
-- Element categorization
-- Distance warnings
-- Weapon enchant detection and timing
-- Sequential totem casting (v4.0+)
+# TotemNesia Troubleshooting
 
-This is useful for troubleshooting or understanding how the addon tracks your totems.
+Type `/tn` to open the settings window, or `/tn bind` to start Key Bind Mode.
 
-## Troubleshooting
+## Updating
 
-**The Totemic Recall icon appears but nothing happens when I click it**
-- Make sure "Lock UI Frame" is checked in options
-- Enable debug mode and check for error messages
-- Verify you have Totemic Recall learned
+**After updating, the addon still acts like the old version**
+- Delete your old `TotemNesia` folder before installing the new one
+- Some launchers keep a cached copy of addons and put it back. Clear or refresh the launcher's copy of TotemNesia after updating.
+- Do a full client restart after an update, not just `/reload`. New files are only picked up when the game starts.
 
-**The icon shows even when I don't have totems**
-- Enable debug mode to see when the addon detects totems
-- Make sure you're running the latest version.
-- Try `/reload` to reset the addon state
+## Totemic Recall Notification
 
-**The icon doesn't appear after combat**
-- Verify you actually placed totems during or before combat
-- Enable debug mode to see if totems are being detected
-- Check if "Hide UI element" is enabled in options
-- Verify the addon is enabled for your current group type (Solo/Parties/Raids)
-- Check if distance tracking triggered it earlier (it may have already shown)
+**The notification never appears**
+- You need to be level 10 and have learned Totemic Recall
+- Check that "Hide recall notification" is off (General tab)
+- Check "Enabled When In" on the General tab for your current group type (solo, party, raid)
+- Make sure you actually had totems down
 
-**The weapon enchant icon doesn't show**
-- Apply a weapon enchant from the flyout menu (icon only appears after using the flyout)
-- Check that "Hide Weapon Enchant Slot" is not enabled
-- Enable debug mode to see weapon enchant detection messages
-- Note: Icon won't show on login/reload for existing enchants (API limitation)
+**Clicking the notification does nothing**
+- "Lock recall notification" must be on (General tab). While it's unlocked, the notification can be dragged instead of clicked.
 
-**The weapon enchant timer is wrong**
-- Timer uses the game's API and should be accurate
-- Enable debug mode to see "Weapon enchant detected, expires in X seconds"
-- Try `/reload` if the timer seems stuck
+## Totem Sets
 
-**Sequential totem casting doesn't work (v4.0+)**
-- Make sure you have totems assigned to Totem Bar slots (Ctrl-click in flyouts)
-- Check ESC > Key Bindings > TotemNesia to verify keybind is set
-- Enable debug mode to see "Sequential cast: [element] - [totem name]"
-- If it says "No totem assigned", you need to assign totems to slots first
+**A set key only drops one totem**
+- One-press sets need Nampower. Without it, each press drops the next totem in the set, and that's expected.
+- To check that Nampower is loaded, type `/script DEFAULT_CHAT_FRAME:AddMessage(tostring(GetNampowerVersion ~= nil))`. It should print `true`.
+- TotemNesia turns on Nampower's instant spell queuing for the moment it casts a set, so nothing needs changing in Nampower's settings
 
-**Sequential cast keeps resetting to Fire**
-- This is normal if you wait more than 5 seconds between presses
-- The auto-reset prevents confusion when you come back later
-- Press the key 4 times quickly to drop all totems
+**Pressing a set key skips some totems**
+- Totems that are already down with more than 10 seconds left, and that you're still in range of, are skipped on purpose
 
-**Totem sets keybind only casts one totem at a time**
-- This is normal if you don't have nampower client mod installed
-- Spam the keybind 4 times to cast all totems (Fire→Earth→Water→Air)
-- Each keypress respects Vanilla WoW's one-spell-per-keypress limitation
-- With nampower, all 4 cast instantly with one keypress
+## Totem Bar
 
-**Gold borders don't show on my selected totems**
-- Make sure you're on the "Totem Sets" tab in settings
-- Click the set number button (1-5) to switch between sets
-- Borders only appear for totems assigned to the currently selected set
-- Try `/reload` if borders seem stuck
+**An icon is red**
+- You're out of that totem's range. With SuperWoW this uses real distance. Without it, a totem turns red when its buff drops off you, so totems that give no buff (Searing, Magma, Grounding) never turn red this way.
 
-**My totem set assignments aren't saving**
-- Assignments save automatically when you click a totem
-- Check that you don't have multiple WoW clients running
-- Try `/reload` after making changes
-- Verify your WTF folder isn't read-only
+**An icon is blue**
+- You don't have the mana to cast it
 
-**Icons show question marks in totem sets tab**
-- This happens on fresh login before spellbook loads
-- Should auto-fix after a few seconds
-- Try `/reload` if icons stay as question marks
-- Enable debug mode to see "Refreshed X totem icons" message
+**My keybinds don't show on the bar**
+- Bind them with Key Bind Mode (Totem Bar tab or `/tn bind`) or in ESC > Key Bindings > TotemNesia
 
-**The totem tracker isn't showing my totems**
-- Make sure "Hide Totem Tracker" is unchecked in options
-- Enable debug mode to see what totems are being tracked
-- Verify the totems are actually active (some expire quickly)
+## Sounds and Alerts
 
-**Totem tracker shows wrong totems**
-- This shouldn't happen, but enable debug mode to see what's being tracked
-- The addon parses combat log messages - make sure you're seeing totem cast messages
-- Try `/reload` to reset
+**No sounds play**
+- Check the alert sound boxes on the Alerts tab and the game's own sound settings
+- The voice files must be in `TotemNesia\Sounds`. If you added or renamed sound files, do a full client restart.
 
-**The flyout menus won't open**
-- Make sure you're mousing over the actual slot, not the space between slots
-- Check that "Hide Totem Bar" is not enabled
-- Try `/reload` if menus seem stuck
+**The aggro alert never fires**
+- It only works in a party or raid while you're in combat, and a mob has to stay on you for a second
+- With SuperWoW, turn on enemy nameplates (V key) so it can see mobs nobody in your group has targeted
 
-**Ctrl-click doesn't assign totems**
-- Make sure you're holding Ctrl while clicking
-- Ctrl-click does NOT work for weapon enchants (they're click-to-cast only)
-- Enable debug mode to see if assignment is being detected
-- Try `/reload` and reassign
+**The line of sight message isn't sent**
+- Your target has to be a player in your group. Healing through mouseover or click-cast addons doesn't change your target, so the addon can't tell who you were healing.
+- Check "Announce in parties" or "Announce in raids" and "Announce line of sight" on the Alerts tab
 
-**Tooltips don't show or show incorrect information**
-- Make sure you have the totem spell learned in your spellbook
-- Some totems may not have proper tooltip data - this is normal
-- Enable debug mode if you see errors
+## Appearance
 
-**I can't move the frames**
-- Open options (`/tn`) and uncheck the appropriate lock option
-- Make sure you're dragging from the frame itself
-- Try `/reload` if frames seem stuck
+**The window or bars don't match pfUI, or I want the old look back**
+- Use the two pfUI boxes under General > Appearance and Debug, then `/reload`
 
-**The Totemic Recall icon doesn't hide when I re-lock it**
-- This is expected if you have an active countdown timer running
-- The icon will hide once the timer expires or you leave combat without totems
-- You can also hide it by checking "Hide UI element"
+## Reporting a Bug
 
-**The elemental indicators don't match my totems**
-- Enable debug mode to see how totems are being categorized
-- Make sure you're using the standard totem names (not renamed by other addons)
-- Some totems may be categorized unexpectedly - report these as bugs
-
-**The addon isn't working in my group**
-- Check the "Will be enabled when in" settings
-- Make sure the checkbox for your current group type (Solo/Parties/Raids) is checked
-- All options are enabled by default
-
-**Distance alerts trigger too often/not often enough**
-- Distance threshold is set at 30 yards (standard totem range)
-- This is working as intended to prevent range loss
-- If you're frequently moving in combat, alerts help you reposition totems
+Turn on Debug mode (General tab), reproduce the problem, and include the chat output when you open an issue on GitHub.

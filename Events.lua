@@ -1,5 +1,5 @@
 -- TotemNesia: Combat log tracking, game events, and the main timer
--- For Turtle WoW (1.12)
+-- For OctoWoW (1.12)
 
 -- Core.lua stops loading on non-Shamans, so every other file stops too
 if not TotemNesia or not TotemNesia.shared then
@@ -246,7 +246,7 @@ eventFrame:SetScript("OnEvent", function()
     
     elseif event == "CHAT_MSG_ADDON" then
         -- Version checking via addon messages
-        local prefix, message, distribution, sender = arg1, arg2, arg3, arg4
+        local prefix, message = arg1, arg2
         if prefix == "TotemNesia" then
             local _, _, versionStr = string.find(message, "VER:(%d+)")
             if versionStr then
