@@ -90,7 +90,7 @@ end)
 
 -- Content frames
 local settingsContent = CreateFrame("ScrollFrame", nil, optionsMenu)
-settingsContent:SetPoint("TOPLEFT", 10, -30)  -- Reduced to -30 for 30px spacing from author text
+settingsContent:SetPoint("TOPLEFT", 10, -52)  -- Starts below the title and "By Fayz" line
 settingsContent:SetPoint("BOTTOMRIGHT", -30, 40)  -- Leave room for scrollbar on right
 
 -- Create scroll child (this is where all settings will go)
@@ -101,7 +101,7 @@ settingsContent:SetScrollChild(settingsScrollChild)
 
 -- Create scrollbar BEFORE setting up mouse wheel (so it exists when referenced)
 local settingsScrollbar = CreateFrame("Slider", nil, optionsMenu)
-settingsScrollbar:SetPoint("TOPRIGHT", optionsMenu, "TOPRIGHT", -10, -40)  -- Start below close X (which ends at -37)
+settingsScrollbar:SetPoint("TOPRIGHT", optionsMenu, "TOPRIGHT", -10, -52)  -- Lines up with the top of the content
 settingsScrollbar:SetPoint("BOTTOMRIGHT", optionsMenu, "BOTTOMRIGHT", -10, 40)  -- Aligned with content bottom
 settingsScrollbar:SetWidth(16)
 settingsScrollbar:SetOrientation("VERTICAL")
