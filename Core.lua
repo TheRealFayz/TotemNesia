@@ -55,14 +55,17 @@ TNC.EFFECT_RANGES = {
 }
 
 -- Seconds between pulses for totems that work in pulses. Drives the thin bar along the
--- bottom of the totem bar icon. Values come from the in-game spell descriptions; confirm
--- on Turtle WoW, which has changed some totems.
+-- bottom of the totem bar icon. Values match server data (cross-checked against the
+-- TotemBar addon's server dump). Healing Stream and Mana Spring also re-sync to your
+-- actual ticks (see TotemBar.lua). Fire Nova goes off once, 4 seconds after it's placed.
 TNC.PULSE_INTERVALS = {
     ["Healing Stream Totem"] = 2,
     ["Mana Spring Totem"] = 2,
     ["Magma Totem"] = 2,
+    ["Stoneclaw Totem"] = 2,
     ["Earthbind Totem"] = 3,
     ["Tremor Totem"] = 4,
+    ["Fire Nova Totem"] = 4,
     ["Poison Cleansing Totem"] = 5,
     ["Disease Cleansing Totem"] = 5
 }
@@ -161,6 +164,7 @@ end
 -- and whenever SPELLS_CHANGED fires. Everything else reads from the table instead of
 -- walking the spellbook again.
 function TotemNesia.BuildSpellCache()
+    TNC.manaCostCache = {}  -- spell ranks or talents may have changed what things cost
     local cache = {}
     local count = 0
     for i = 1, TNC.MAX_SPELLBOOK_SCAN do
@@ -383,6 +387,13 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.manaAnnounce == nil then
         TotemNesiaDB.manaAnnounce = true
     end
+    TotemNesiaDB.onePressWithoutNampower = nil  -- removed experimental setting
+    if TotemNesiaDB.pfuiSkin == nil then
+        TotemNesiaDB.pfuiSkin = true  -- match pfUI's look when pfUI is installed
+    end
+    if TotemNesiaDB.pfuiSkinBars == nil then
+        TotemNesiaDB.pfuiSkinBars = true  -- also restyle the bars and recall notification
+    end
     
     -- Initialize totem sets (5 sets)
     if TotemNesiaDB.totemSets == nil then
@@ -552,8 +563,25 @@ local function HasTotemicMastery()
 end
 
 -- Function to get totem duration in seconds
+-- Searing Totem lasts longer at each rank (30, 35, 40, 45, 50, 55 seconds for ranks 1-6)
+local function GetSearingDuration()
+    local info = TotemNesia.GetCachedSpell("Searing Totem")
+    if info then
+        local _, rankText = GetSpellName(info.id, BOOKTYPE_SPELL)
+        local _, _, rank = string.find(rankText or "", "(%d+)")
+        rank = tonumber(rank)
+        if rank and rank >= 1 and rank <= 6 then
+            return 25 + rank * 5
+        end
+    end
+    return 30
+end
+
 local function GetTotemDuration(totemName)
     local baseDuration = totemDurations[totemName]
+    if totemName == "Searing Totem" then
+        baseDuration = GetSearingDuration()
+    end
     
     -- If totem not in table, default to 120 seconds
     if not baseDuration then
@@ -689,6 +717,165 @@ function TotemNesia.GetTotemDistance(totemName)
     return TNC.WorldDistance(px, py, pz, tx, ty, tz)
 end
 
+-- ----------------------------------------------------------------------------
+-- Out of range check
+-- ----------------------------------------------------------------------------
+-- With SuperWoW, the real distance to the totem is used.
+-- Without it, the totem's buff is used instead: a totem's buff has the same icon as the
+-- totem spell, so if that icon was on your buff bar and is now gone, you've walked out of
+-- the totem's range. Totems that give no buff (Searing, Magma, Grounding and the like)
+-- never show the icon, so they're never marked out of range this way.
+TotemNesia.pulseAnchors = {}   -- totem name -> time of its last observed pulse
+TotemNesia.totemBuffSeen = {}  -- totem name -> true once its buff has been on the player
+
+local buffIconCache = {}
+local buffIconCacheTime = -1
+local function GetPlayerBuffIcons()
+    local now = GetTime()
+    if now - buffIconCacheTime < 0.2 then
+        return buffIconCache
+    end
+    buffIconCacheTime = now
+    buffIconCache = {}
+    for i = 1, 32 do
+        local texture = UnitBuff("player", i)
+        if not texture then
+            break
+        end
+        buffIconCache[string.lower(texture)] = true
+    end
+    return buffIconCache
+end
+
+function TotemNesia.IsTotemOutOfRange(totemName)
+    local distance = TotemNesia.GetTotemDistance(totemName)
+    if distance then
+        return distance > TotemNesia.GetTotemRange(totemName)
+    end
+    local info = TotemNesia.GetCachedSpell(totemName)
+    if not info or not info.texture then
+        return false
+    end
+    if GetPlayerBuffIcons()[string.lower(info.texture)] then
+        TotemNesia.totemBuffSeen[totemName] = true
+        return false
+    end
+    return TotemNesia.totemBuffSeen[totemName] and true or false
+end
+
+-- ----------------------------------------------------------------------------
+-- Mana cost and affordability
+-- ----------------------------------------------------------------------------
+-- 1.12 has no API for a spell's mana cost, so it's read from the spell's tooltip
+-- ("80 Mana"). Costs are cached and the cache is cleared when the spellbook changes.
+TNC.manaCostCache = {}
+
+function TotemNesia.GetSpellManaCost(spellName)
+    local cached = TNC.manaCostCache[spellName]
+    if cached then
+        return cached
+    end
+    local info = TotemNesia.GetCachedSpell(spellName)
+    if not info or not TNC.scanTooltip then
+        return nil
+    end
+    local tip = TNC.scanTooltip
+    tip:SetOwner(WorldFrame, "ANCHOR_NONE")
+    tip:ClearLines()
+    tip:SetSpell(info.id, BOOKTYPE_SPELL)
+    local cost = nil
+    local numLines = tip:NumLines() or 0
+    for i = 2, numLines do
+        local line = getglobal("TotemNesiaScanTooltipTextLeft" .. i)
+        local text = line and line:GetText()
+        if text then
+            local _, _, amount = string.find(text, "^(%d+) [Mm]ana")
+            if amount then
+                cost = tonumber(amount)
+                break
+            end
+        end
+    end
+    tip:Hide()
+    if cost then
+        TNC.manaCostCache[spellName] = cost
+    end
+    return cost
+end
+
+-- True unless we know the spell costs more mana than you have
+function TotemNesia.CanAffordSpell(spellName)
+    if not spellName or spellName == "" then
+        return true
+    end
+    local cost = TotemNesia.GetSpellManaCost(spellName)
+    if not cost then
+        return true
+    end
+    return UnitMana("player") >= cost
+end
+
+-- ----------------------------------------------------------------------------
+-- Totem sets: skip totems that are already down
+-- ----------------------------------------------------------------------------
+-- A set totem is skipped when that same totem is already out, has more than
+-- SET_SKIP_MIN_REMAINING seconds left, and you're still in its range. Pressing a set
+-- key again then only drops what is missing, expiring, or left behind.
+local SET_SKIP_MIN_REMAINING = 10
+
+local function IsTotemFresh(totemName)
+    if not totemName or not TotemNesia.activeTotems[totemName] then
+        return false
+    end
+    local placed = TotemNesia.totemTimestamps[totemName]
+    if not placed then
+        return false
+    end
+    local remaining = placed + GetTotemDuration(totemName) - GetTime()
+    return remaining > SET_SKIP_MIN_REMAINING and not TotemNesia.IsTotemOutOfRange(totemName)
+end
+
+function TotemNesia.ShouldSkipSetTotem(element, totemName)
+    -- The set's totem after the water slot's cleansing mode swap
+    local primary = totemName
+    if element == "water" and TotemNesiaDB and TotemNesiaDB.cleansingMode then
+        local cleansing = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
+        if cleansing and IsTotemLearned(cleansing) then
+            primary = cleansing
+        end
+    end
+    if IsTotemFresh(primary) then
+        return true
+    end
+    -- Or the fallback that would be cast instead, if that's what's already out
+    local resolved = TotemNesia.ResolveTotemForElement(element, totemName)
+    if resolved ~= primary and IsTotemFresh(resolved) then
+        return true
+    end
+    return false
+end
+
+-- ----------------------------------------------------------------------------
+-- pfUI bar style helpers (the skinning itself is at the end of TotemBar.lua)
+-- ----------------------------------------------------------------------------
+-- True when the bars should take pfUI's look: pfUI is loaded and both Appearance
+-- options are on
+function TNC.BarsUsePfUI()
+    return TotemNesiaDB and TotemNesiaDB.pfuiSkin and TotemNesiaDB.pfuiSkinBars
+        and pfUI and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config and true or false
+end
+
+-- Put a frame's border back to its normal color: pfUI's border color when the bars are
+-- skinned, grey otherwise. Used after a hover or flash changes it.
+function TNC.ResetBorder(frame)
+    local c = TNC.borderColor
+    if c then
+        frame:SetBackdropBorderColor(c[1], c[2], c[3], c[4])
+    else
+        frame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    end
+end
+
 -- Timer text color: white normally, gold in the last quarter, red in the last 5 seconds
 function TotemNesia.GetTimerColor(remaining, duration)
     if remaining <= 5 then
@@ -782,6 +969,8 @@ function TotemNesia.RemoveTotem(totemName, reason)
     TotemNesia.totemTimestamps[totemName] = nil
     TotemNesia.totemPositions[totemName] = nil
     TotemNesia.totemUnits[totemName] = nil
+    TotemNesia.pulseAnchors[totemName] = nil
+    TotemNesia.totemBuffSeen[totemName] = nil
     if next(TotemNesia.activeTotems) == nil then
         TotemNesia.hasTotems = false
     end
@@ -796,6 +985,8 @@ function TotemNesia.ClearAllTotems()
     TotemNesia.totemTimestamps = {}
     TotemNesia.totemPositions = {}
     TotemNesia.totemUnits = {}
+    TotemNesia.pulseAnchors = {}
+    TotemNesia.totemBuffSeen = {}
     TotemNesia.hasTotems = false
 end
 
@@ -821,6 +1012,8 @@ function TotemNesia.RegisterTotem(totemName)
 
     TotemNesia.activeTotems[totemName] = true
     TotemNesia.totemTimestamps[totemName] = now
+    TotemNesia.pulseAnchors[totemName] = nil
+    TotemNesia.totemBuffSeen[totemName] = nil
 
     -- Starting position is where the player stands; SuperWoW replaces it with the
     -- totem's own position once the totem unit shows up

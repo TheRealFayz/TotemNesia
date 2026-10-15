@@ -271,7 +271,7 @@ for i, element in ipairs(elementOrder) do
         end)
         button:SetScript("OnLeave", function()
             GameTooltip:Hide()
-            this:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+            TNC.ResetBorder(this)
         end)
         
         -- Click handling
@@ -696,8 +696,7 @@ function TotemNesia.UpdateTotemBar()
                             slot.timerText:SetText("")
                         end
                     end
-                    local distance = TotemNesia.GetTotemDistance(totemName)
-                    if distance and distance > TotemNesia.GetTotemRange(totemName) then
+                    if TotemNesia.IsTotemOutOfRange(totemName) then
                         outOfRange = true
                     end
                     break
@@ -719,10 +718,28 @@ function TotemNesia.UpdateTotemBar()
                 slot.iconTexture:SetAlpha(0)
             end
             
+            -- Red when you're out of the active totem's range, blue when you can't afford
+            -- the slot's totem (like the default action bars), normal otherwise
             if outOfRange then
                 slot.iconTexture:SetVertexColor(1, 0.35, 0.35)
+            elseif displayTotem and not TotemNesia.CanAffordSpell(displayTotem) then
+                slot.iconTexture:SetVertexColor(0.4, 0.4, 1)
             else
                 slot.iconTexture:SetVertexColor(1, 1, 1)
+            end
+        end
+
+        -- Open flyouts: tint totems and enchants you can't afford blue
+        if slot.flyout and slot.flyout:IsVisible() then
+            local buttons = { slot.flyout:GetChildren() }
+            for _, button in ipairs(buttons) do
+                if button.iconTexture and button.totemName then
+                    if TotemNesia.CanAffordSpell(button.totemName) then
+                        button.iconTexture:SetVertexColor(1, 1, 1)
+                    else
+                        button.iconTexture:SetVertexColor(0.4, 0.4, 1)
+                    end
+                end
             end
         end
     end
@@ -773,7 +790,8 @@ TNC.fastFrame:SetScript("OnUpdate", function()
         if slot.pulseFill then
             local totemName = slot.activeTotem
             local interval = totemName and TNC.PULSE_INTERVALS[totemName]
-            local timestamp = totemName and TotemNesia.totemTimestamps[totemName]
+            -- Healing Stream / Mana Spring re-sync to your actual ticks (pulseAnchors)
+            local timestamp = totemName and (TotemNesia.pulseAnchors[totemName] or TotemNesia.totemTimestamps[totemName])
             if interval and timestamp then
                 local elapsed = now - timestamp
                 local progress = (elapsed - math.floor(elapsed / interval) * interval) / interval
@@ -795,7 +813,7 @@ TNC.fastFrame:SetScript("OnUpdate", function()
                 local pulse = 0.5 + 0.5 * math.sin(now * 6)
                 slot:SetBackdropBorderColor(1, 0.2 * pulse, 0.2 * pulse, 1)
             else
-                slot:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+                TNC.ResetBorder(slot)
             end
         end
     end
@@ -976,6 +994,7 @@ function TotemNesia.UpdateTotemTracker()
             icon.timerText = timerText
             
             TotemNesia.totemTrackerIcons[totemName] = icon
+            TNC.SkinTrackerIcon(icon)  -- pfUI style, if the bars are skinned
         end
         
         -- ALWAYS refresh the texture (fixes blank icons if spellbook wasn't loaded initially)
@@ -998,9 +1017,9 @@ function TotemNesia.UpdateTotemTracker()
         end
         icon:Show()
         
-        -- Full color, or red tint when out of this totem's range (SuperWoW only)
-        local distance = TotemNesia.GetTotemDistance(totemName)
-        if distance and distance > TotemNesia.GetTotemRange(totemName) then
+        -- Full color, or red tint when out of this totem's range
+        -- (real distance with SuperWoW, the totem's buff without it)
+        if TotemNesia.IsTotemOutOfRange(totemName) then
             icon.texture:SetVertexColor(1, 0.35, 0.35)
         else
             icon.texture:SetVertexColor(1, 1, 1)
@@ -1080,6 +1099,215 @@ totemUpdateFrame:SetScript("OnUpdate", function()
     end
 end)
 
+
+-- ============================================================================
+-- PULSE SYNC: Healing Stream and Mana Spring
+-- ============================================================================
+-- Each tick shows up in the combat log ("You gain 12 Mana from Mana Spring."). When one
+-- of ours is out, the pulse bar is re-anchored to that tick so it stays in step with the
+-- server instead of drifting from the moment the totem was placed.
+local pulseSyncFrame = CreateFrame("Frame")
+pulseSyncFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_SELF_BUFFS")
+pulseSyncFrame:SetScript("OnEvent", function()
+    if not arg1 then
+        return
+    end
+    if string.find(arg1, "from Mana Spring") and TotemNesia.activeTotems["Mana Spring Totem"] then
+        TotemNesia.pulseAnchors["Mana Spring Totem"] = GetTime()
+    elseif string.find(arg1, "from Healing Stream") and TotemNesia.activeTotems["Healing Stream Totem"] then
+        TotemNesia.pulseAnchors["Healing Stream Totem"] = GetTime()
+    end
+end)
+
+-- ============================================================================
+-- KEY BIND MODE: hover a totem bar slot and press a key to bind it
+-- ============================================================================
+-- While on, a full-screen frame takes keyboard input (the mouse still works normally).
+-- The key goes to the slot under the mouse: Fire, Earth, Water, Air, or the shield slot.
+-- Esc over a slot clears its key. Esc anywhere else turns the mode off.
+local BIND_NAMES = {
+    fire = "Totem Bar 1 (Fire)",
+    earth = "Totem Bar 2 (Earth)",
+    water = "Totem Bar 3 (Water)",
+    air = "Totem Bar 4 (Air)",
+    shield = "Recast Shield"
+}
+local BARE_MODIFIERS = {
+    LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true, UNKNOWN = true
+}
+
+local bindFrame = CreateFrame("Frame", "TotemNesiaBindFrame", UIParent)
+bindFrame:SetAllPoints(UIParent)
+bindFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+bindFrame:EnableMouse(false)
+bindFrame:EnableKeyboard(false)
+bindFrame:Hide()
+local bindInfo = bindFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+bindInfo:SetPoint("TOP", UIParent, "TOP", 0, -120)
+bindInfo:SetText("TotemNesia Key Bind Mode\nHover a totem bar slot and press a key. Esc over a slot clears it.\nPress Esc anywhere else to finish.")
+
+-- The binding for the totem bar slot under the mouse, or nil
+local function BindingUnderMouse()
+    local focus = GetMouseFocus()
+    if focus and focus.element and TotemNesia.totemBarSlots[focus.element] == focus then
+        return BIND_NAMES[focus.element]
+    end
+    return nil
+end
+
+local function SaveKeyBindings()
+    if GetCurrentBindingSet then
+        SaveBindings(GetCurrentBindingSet())
+    else
+        SaveBindings(1)
+    end
+    TotemNesia.UpdateTotemBarKeybinds()
+end
+
+function TotemNesia.ToggleBindMode()
+    if bindFrame:IsShown() then
+        bindFrame:EnableKeyboard(false)
+        bindFrame:Hide()
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Key bind mode off")
+    else
+        bindFrame:Show()
+        bindFrame:EnableKeyboard(true)
+        DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Key bind mode on. Hover a totem bar slot and press a key.")
+    end
+end
+
+bindFrame:SetScript("OnKeyUp", function()
+    local key = arg1
+    if not key or BARE_MODIFIERS[key] then
+        return
+    end
+    local action = BindingUnderMouse()
+    if key == "ESCAPE" then
+        if action then
+            local key1, key2 = GetBindingKey(action)
+            if key1 then
+                SetBinding(key1)
+            end
+            if key2 then
+                SetBinding(key2)
+            end
+            SaveKeyBindings()
+        else
+            TotemNesia.ToggleBindMode()
+        end
+        return
+    end
+    if not action then
+        return
+    end
+    local prefix = ""
+    if IsAltKeyDown() then
+        prefix = prefix .. "ALT-"
+    end
+    if IsControlKeyDown() then
+        prefix = prefix .. "CTRL-"
+    end
+    if IsShiftKeyDown() then
+        prefix = prefix .. "SHIFT-"
+    end
+    local fullKey = prefix .. key
+    SetBinding(fullKey)          -- clear whatever this key did before
+    SetBinding(fullKey, action)  -- and bind it to the slot
+    SaveKeyBindings()
+end)
+
+-- ============================================================================
+-- PFUI BAR STYLE
+-- ============================================================================
+-- When pfUI is installed (and both Appearance options are on), the totem bar, its
+-- flyouts, the totem tracker, and the recall notification take pfUI's panels, borders,
+-- shadows, and font. Layout, sizes, and every meaningful color (red out of range, blue
+-- no mana, grey missing enchant/shield, shield flash, flyout hover) stay the same.
+-- Runs once when you enter the world, after pfUI has finished loading.
+
+-- Run a pfUI call on its own so one failure doesn't stop the rest
+local function TrySkin(func, a1, a2, a3, a4)
+    if not func then
+        return
+    end
+    local ok, err = pcall(func, a1, a2, a3, a4)
+    if not ok then
+        TotemNesia.DebugPrint("pfUI bar skin error: " .. tostring(err))
+    end
+end
+
+-- Tracker icons are created as totems appear, so each one is styled when it's made
+function TNC.SkinTrackerIcon(icon)
+    if not TNC.barsSkinned or not icon or icon.pfSkinned then
+        return
+    end
+    icon.pfSkinned = true
+    TrySkin(pfUI.api.CreateBackdrop, icon)  -- border drawn just outside the icon
+    if icon.texture then
+        icon.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
+    if icon.timerText then
+        icon.timerText:SetFont(TNC.pfFont, 10, "OUTLINE")
+    end
+end
+
+local function SkinBarsForPfUI()
+    if TNC.barsSkinned or not TNC.BarsUsePfUI() then
+        return
+    end
+    local api = pfUI.api
+    TNC.barsSkinned = true
+    TNC.pfFont = pfUI.font_default or "Fonts\\FRIZQT__.TTF"
+    local ok, r, g, b, a = pcall(api.GetStringColor, pfUI_config.appearance.border.color)
+    if ok and r then
+        TNC.borderColor = {r, g, b, a or 1}
+    end
+    local font = TNC.pfFont
+
+    -- Totem bar
+    TrySkin(api.CreateBackdrop, totemBar, nil, true)
+    TrySkin(api.CreateBackdropShadow, totemBar)
+    for _, slot in pairs(TotemNesia.totemBarSlots) do
+        TrySkin(api.CreateBackdrop, slot, nil, true)
+        slot.timerText:SetFont(font, 10, "OUTLINE")
+        slot.keybindText:SetFont(font, 10, "OUTLINE")
+        if slot.modeText then
+            slot.modeText:SetFont(font, 9, "OUTLINE")
+        end
+        -- Flyouts and the totems in them
+        if slot.flyout then
+            TrySkin(api.CreateBackdrop, slot.flyout, nil, true)
+            TrySkin(api.CreateBackdropShadow, slot.flyout)
+            local buttons = { slot.flyout:GetChildren() }
+            for _, button in ipairs(buttons) do
+                TrySkin(api.CreateBackdrop, button, nil, true)
+            end
+        end
+    end
+
+    -- Totem tracker icons that already exist
+    for _, icon in pairs(TotemNesia.totemTrackerIcons) do
+        TNC.SkinTrackerIcon(icon)
+    end
+
+    -- Recall notification
+    if iconFrame then
+        TrySkin(api.CreateBackdrop, iconFrame, nil, true)
+        TrySkin(api.CreateBackdropShadow, iconFrame)
+    end
+    if S.timerText then
+        S.timerText:SetFont(font, 48, "OUTLINE")
+    end
+
+    TotemNesia.DebugPrint("pfUI style applied to the bars")
+end
+
+local barSkinFrame = CreateFrame("Frame")
+barSkinFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+barSkinFrame:SetScript("OnEvent", function()
+    this:UnregisterAllEvents()
+    SkinBarsForPfUI()
+end)
 
 -- Share with files loaded after this one
 TotemNesia.shared.totemBar = totemBar

@@ -184,7 +184,14 @@ function TotemNesia.CheckTotemDistance()
         return false
     end
     
-    -- Without SuperWoW: estimate from map coordinates
+    -- Without SuperWoW: if a totem's buff has dropped off you, you've left its range
+    for totemName, _ in pairs(TotemNesia.activeTotems) do
+        if TotemNesia.IsTotemOutOfRange(totemName) then
+            return true
+        end
+    end
+
+    -- Otherwise estimate from map coordinates (covers totems that give no buff)
     local px, py = GetPlayerMapPosition("player")
     if not px or not py or (px == 0 and py == 0) then
         return false -- Can't determine position

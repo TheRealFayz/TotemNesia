@@ -26,6 +26,8 @@ A 6-slot quick-cast bar: Fire, Earth, Water, and Air totems, plus a weapon encha
 - **Weapon slot** - Click to reapply your assigned enchant. Greys out when your weapon has no enchant.
 - **Shield slot** - Click to recast your shield. Shows charges left and can flash when you're low.
 - **Timers** on every slot, and a slot with no assigned totem shows the one you have out
+- **Red** icon: you're out of that totem's range. **Blue** icon: you don't have the mana to cast it.
+- **Key Bind Mode** - Hover a slot and press a key to bind it (button on the Totem Bar tab)
 - Horizontal or vertical layout, lock, hide, and scale options
 
 <img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/Totem%20Bar%20Closed.png?raw=true">
@@ -37,6 +39,7 @@ A 6-slot quick-cast bar: Fire, Earth, Water, and Air totems, plus a weapon encha
 - Each set has its own keybind
 - **With Nampower:** one press drops the whole set
 - **Without Nampower:** each press drops the next totem in the set (Fire, Earth, Water, Air)
+- Totems that are already down with more than 10 seconds left are skipped, so pressing again only replaces what's missing, expiring, or left behind
 
 <img src="https://github.com/TheRealFayz/TotemNesia/blob/main/Images/1%20button%20totems.gif?raw=true">
 
@@ -62,7 +65,7 @@ A small bar that shows every active totem with its timer. It can be moved, locke
 
 Click the minimap button to open the settings window (right-click and drag to move the button).
 
-- **General** - Recall notification, totem tracker, totem range, which group types the addon runs in, and debug mode
+- **General** - Recall notification, totem tracker, totem range, which group types the addon runs in, debug mode, and appearance
 - **Totem Bar** - Slots, layout, flyout direction, and scale
 - **Totem Sets** - Build your 5 sets
 - **Alerts** - Voice, alert sounds, mana thresholds, aggro alert, and group announcements
@@ -74,7 +77,8 @@ Keybinds are in ESC > Key Bindings > TotemNesia: Totem Set 1-5, Totem Bar 1-4, a
 TotemNesia works on a plain client. These add extras when installed:
 
 - **Nampower** - One-press totem sets. If Nampower's instant spell queuing is off, TotemNesia turns it on for that key press and puts your setting back right after.
-- **SuperWoW** - Real distance to each totem, red totem bar icons when you're out of range, and an aggro alert that can see mobs nobody has targeted (enemy nameplates need to be on)
+- **pfUI** - The settings window, totem bar, flyouts, totem tracker, and recall notification match pfUI's look. Each part can be turned off under General > Appearance.
+- **SuperWoW** - Exact distance to each totem (without it, range is judged by whether the totem's buff is still on you), and an aggro alert that can see mobs nobody has targeted (enemy nameplates need to be on)
 
 ## For Developers
 

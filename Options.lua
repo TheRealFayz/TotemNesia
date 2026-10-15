@@ -356,7 +356,14 @@ function TNC.BuildOptionsUI()
     local tabs = {}
     local function SelectTab(index)
         for i, tab in ipairs(tabs) do
-            if i == index then
+            if ui.pfSkinned then
+                -- pfUI style: gold border on the active tab, normal border on the rest
+                if i == index then
+                    tab:SetBackdropBorderColor(1, 0.82, 0, 1)
+                else
+                    tab:SetBackdropBorderColor(pfUI.api.GetStringColor(pfUI_config.appearance.border.color))
+                end
+            elseif i == index then
                 tab:SetNormalTexture(ACTIVE_TAB)
             else
                 tab:SetNormalTexture(INACTIVE_TAB)
@@ -482,6 +489,13 @@ function TNC.BuildOptionsUI()
     y = y - 28
     Check(COL_L, "Debug mode", "debugMode")
     y = y - 30
+
+    Header("Appearance")
+    Check(COL_L, "Match pfUI style (when pfUI is installed)", "pfuiSkin")
+    y = y - 26
+    Check(COL_L, "Also style the bars and recall notification", "pfuiSkinBars")
+    y = y - 26
+    Note("Gives this window, and optionally the totem bar, tracker, and recall notification, pfUI's look. Changes take effect after a /reload.", 30)
     EndPage()
 
     -- ==================================================================
@@ -564,12 +578,27 @@ function TNC.BuildOptionsUI()
         function(v) totemBar:SetScale(v) end)
     y = y - 6
 
+    Header("Key Bindings")
+    local bindButton = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+    bindButton:SetWidth(160)
+    bindButton:SetHeight(24)
+    bindButton:SetPoint("TOPLEFT", COL_L, y)
+    bindButton:SetText("Key Bind Mode")
+    bindButton:SetScript("OnClick", function()
+        optionsMenu:Hide()  -- get the window out of the way of the totem bar
+        TotemNesia.ToggleBindMode()
+    end)
+    y = y - 32
+    Note("Hover a totem bar slot and press a key to bind it. Esc over a slot clears its key. Press Esc anywhere else to finish.", 30)
+    y = y - 6
+
     Header("How to Use")
     Note("Hold Shift and mouse over a slot to open its flyout (unless shift is disabled above).", 30)
     Note("Ctrl-click a flyout totem or weapon enchant to put it in the slot.", 18)
     Note("Alt-click a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown. Alt-click it again to clear.", 30)
     Note("Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off.", 30)
-    Note("Click the shield slot, or use the Recast Shield keybind, to recast your shield.", 22)
+    Note("Click the shield slot, or use the Recast Shield keybind, to recast your shield.", 30)
+    Note("A red icon means you're out of that totem's range. A blue icon means you don't have the mana to cast it.", 30)
     EndPage()
 
     -- ==================================================================
@@ -815,7 +844,74 @@ function TNC.BuildOptionsUI()
     -- ------------------------------------------------------------------
     -- Refresh every control from the saved settings (runs when the window opens)
     -- ------------------------------------------------------------------
+    -- ------------------------------------------------------------------
+    -- pfUI skin: when pfUI is installed, restyle this window with pfUI's own skinning
+    -- functions so it matches the rest of the player's interface. Runs once, the first
+    -- time the window opens (by then pfUI has always finished loading). The totem bar,
+    -- tracker, and recall notification are left alone.
+    -- ------------------------------------------------------------------
+    function ui.ApplyPfUISkin()
+        if ui.pfSkinned or not TotemNesiaDB.pfuiSkin then
+            return
+        end
+        if not (pfUI and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config) then
+            return
+        end
+        local api = pfUI.api
+        ui.pfSkinned = true
+
+        -- Each skin call runs on its own, so one control that won't take the skin
+        -- doesn't stop the rest of the window from being styled
+        local function Try(func, a1, a2, a3, a4, a5)
+            if not func then
+                return
+            end
+            local ok, err = pcall(func, a1, a2, a3, a4, a5)
+            if not ok then
+                TotemNesia.DebugPrint("pfUI skin error: " .. tostring(err))
+            end
+        end
+
+        -- Window, close button, and scrollbar
+        Try(api.CreateBackdrop, optionsMenu, nil, true)
+        Try(api.CreateBackdropShadow, optionsMenu)
+        Try(api.SkinCloseButton, closeButton, optionsMenu, -6, -6)
+        Try(api.CreateBackdrop, settingsScrollbar, nil, true)
+        scrollbarThumb:SetTexture(0.8, 0.8, 0.8, 0.8)
+
+        -- Tabs: flat pfUI panels in a row under the window
+        for i, tab in ipairs(tabs) do
+            tab:SetNormalTexture("")
+            tab:SetHighlightTexture("")
+            tab:SetHeight(20)
+            tab:SetWidth(90)
+            Try(api.CreateBackdrop, tab, nil, true)
+            tab:ClearAllPoints()
+            if i == 1 then
+                tab:SetPoint("TOPLEFT", optionsMenu, "BOTTOMLEFT", 0, -3)
+            else
+                tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", 3, 0)
+            end
+        end
+
+        -- Controls
+        for _, cb in ipairs(checkboxes) do
+            Try(api.SkinCheckbox, cb)
+        end
+        for _, slider in ipairs(sliders) do
+            Try(api.SkinSlider, slider)
+        end
+        for i = 1, 5 do
+            Try(api.SkinButton, setButtons[i])
+        end
+        Try(api.SkinButton, layoutButton)
+        Try(api.SkinButton, flyoutButton)
+        Try(api.SkinButton, bindButton)
+        Try(api.SkinDropDown, voiceDropDown, nil, nil, nil, true)
+    end
+
     function ui.RefreshAll()
+        ui.ApplyPfUISkin()
         for _, cb in ipairs(checkboxes) do
             local value = TotemNesiaDB[cb.dbKey]
             if cb.invert then

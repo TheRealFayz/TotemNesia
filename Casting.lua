@@ -62,6 +62,34 @@ local function EnsureInstantQueue()
     end
 end
 
+-- Element order used when casting a totem set
+local SET_ORDER = {"fire", "earth", "water", "air"}
+
+-- Double-press guard for one-press sets. A totem only counts as "already down" once the
+-- combat log confirms it, which takes a moment. Without this, a quick second press could
+-- send the whole set again. An element cast less than SET_PRESS_GUARD seconds ago is left
+-- alone. (Same idea as CallOfElements' throw guard.)
+local SET_PRESS_GUARD = 1.0
+local setLastCast = {}  -- element -> time it was last sent by a set cast
+
+-- Cast every totem in the set that needs dropping, all on this one keypress
+local function CastWholeSet(set, setNumber, modeName)
+    local now = GetTime()
+    local castCount = 0
+    local skipCount = 0
+    for _, element in ipairs(SET_ORDER) do
+        local totemName = set[element]
+        local sentRecently = setLastCast[element] and (now - setLastCast[element]) < SET_PRESS_GUARD
+        if sentRecently or TotemNesia.ShouldSkipSetTotem(element, totemName) then
+            skipCount = skipCount + 1
+        elseif TotemNesia.CastTotemForElement(element, totemName, true) then
+            castCount = castCount + 1
+            setLastCast[element] = now
+        end
+    end
+    TotemNesia.DebugPrint("Set " .. setNumber .. ": cast " .. castCount .. ", skipped " .. skipCount .. " (" .. modeName .. ")")
+end
+
 -- Sequential totem casting function
 function TotemNesia.CastNextTotem(setNumber)
     -- Safety checks
@@ -77,85 +105,50 @@ function TotemNesia.CastNextTotem(setNumber)
     
     local set = TotemNesiaDB.totemSets[setNumber]
     
-    -- NAMPOWER MODE: Cast all 4 totems instantly
+    -- Totems that are already down (same totem, more than 10 seconds left, and you're in
+    -- range) are skipped, so pressing the key again only drops what's missing or expiring.
+    -- NAMPOWER MODE: every totem that needs dropping goes out on this one keypress
     if TotemNesia.hasNampower then
         EnsureInstantQueue()
-        local castCount = 0
-        
-        -- Each cast goes through cleansing mode and fallback handling
-        if TotemNesia.CastTotemForElement("fire", set.fire, true) then
-            castCount = castCount + 1
-        end
-        
-        if TotemNesia.CastTotemForElement("earth", set.earth, true) then
-            castCount = castCount + 1
-        end
-        
-        if TotemNesia.CastTotemForElement("water", set.water, true) then
-            castCount = castCount + 1
-        end
-        
-        if TotemNesia.CastTotemForElement("air", set.air, true) then
-            castCount = castCount + 1
-        end
-        
-        if castCount > 0 then
-            TotemNesia.DebugPrint("Cast " .. castCount .. " totems from Set " .. setNumber .. " (Nampower)")
-        else
-            TotemNesia.DebugPrint("No totems assigned to Set " .. setNumber)
-        end
-        
+        CastWholeSet(set, setNumber, "Nampower")
         return
     end
-    
-    -- SEQUENTIAL MODE: Cast one totem at a time for non-nampower users
-    -- Check for timeout (10 seconds of inactivity resets to Fire)
+
+    -- Without Nampower the client only takes one totem per keypress (tested on OctoWoW),
+    -- so sets are cast one totem at a time below.
+
+    -- SEQUENTIAL MODE (no Nampower): one totem per keypress, in Fire, Earth, Water, Air order.
+    -- Empty slots and totems that are already down are passed over, so every press drops
+    -- something useful. 10 seconds without a press starts the order over at Fire.
     local currentTime = GetTime()
     if currentTime - TotemNesia.sequentialCastLastTime > 10 then
         TotemNesia.sequentialCastIndex = 1
     end
-    
-    -- Determine which totem to cast based on sequence index
-    local totemName = nil
-    local familyName = nil
-    local element = nil
-    
-    if TotemNesia.sequentialCastIndex == 1 then
-        totemName = set.fire
-        familyName = "Fire"
-        element = "fire"
-    elseif TotemNesia.sequentialCastIndex == 2 then
-        totemName = set.earth
-        familyName = "Earth"
-        element = "earth"
-    elseif TotemNesia.sequentialCastIndex == 3 then
-        totemName = set.water
-        familyName = "Water"
-        element = "water"
-    elseif TotemNesia.sequentialCastIndex == 4 then
-        totemName = set.air
-        familyName = "Air"
-        element = "air"
-    end
-    
-    -- Cast the totem (cleansing mode can fill the water step even if the set has no water totem)
+
     local castName = nil
-    if element then
-        castName = TotemNesia.CastTotemForElement(element, totemName)
+    for _ = 1, 4 do
+        local index = TotemNesia.sequentialCastIndex
+        local element = SET_ORDER[index]
+        local totemName = set[element]
+
+        -- Move on to the next element for the next press (or the next try in this loop)
+        TotemNesia.sequentialCastIndex = index + 1
+        if TotemNesia.sequentialCastIndex > 4 then
+            TotemNesia.sequentialCastIndex = 1
+        end
+
+        if not TotemNesia.ShouldSkipSetTotem(element, totemName) then
+            castName = TotemNesia.CastTotemForElement(element, totemName)
+            if castName then
+                TotemNesia.DebugPrint("Casting " .. castName .. " (Set " .. setNumber .. ", " .. element .. ")")
+                break
+            end
+        end
     end
-    if castName then
-        TotemNesia.DebugPrint("Casting " .. castName .. " (Set " .. setNumber .. ", " .. familyName .. " " .. TotemNesia.sequentialCastIndex .. "/4)")
-    else
-        TotemNesia.DebugPrint("No " .. (familyName or "totem") .. " assigned to Set " .. setNumber)
+    if not castName then
+        TotemNesia.DebugPrint("Set " .. setNumber .. ": nothing to cast (all down or empty)")
     end
-    
-    -- Advance to next totem in sequence
-    TotemNesia.sequentialCastIndex = TotemNesia.sequentialCastIndex + 1
-    if TotemNesia.sequentialCastIndex > 4 then
-        TotemNesia.sequentialCastIndex = 1
-        TotemNesia.DebugPrint("Sequence complete, resetting to Fire")
-    end
-    
+
     -- Update last cast time
     TotemNesia.sequentialCastLastTime = GetTime()
 end
