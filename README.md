@@ -11,7 +11,7 @@ TotemNesia tracks your totems, gives you a quick-cast totem bar, and reminds you
 - Voice alerts with four voices to choose from (Jenny, Aria, Roger, and Libby), with more to come
 - New aggro alert, plus group announcements for low mana, aggro, and line of sight
 - Totem sets drop every totem in one press with Nampower
-- Weapon enchants can be assigned to the weapon slot with Ctrl-click, just like totems
+- Weapon enchants can be assigned to the weapon slot, just like totems
 
 **Upgrading from 1.x:** delete your old `TotemNesia` folder before installing 2.0. Your settings should be maintained post update.
 
@@ -20,9 +20,9 @@ TotemNesia tracks your totems, gives you a quick-cast totem bar, and reminds you
 ### Totem Bar
 A 6-slot quick-cast bar: Fire, Earth, Water, and Air totems, plus a weapon enchant slot and a shield slot.
 - **Flyouts** - Hold Shift and mouse over a slot to pick from every totem or enchant for it
-- **Ctrl-click** a flyout totem or enchant to assign it to the slot
+- **Click** a flyout totem to cast it, or **right-click** it to assign it to the slot
 - **Alt-click** a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown
-- **Right-click the water slot** to cycle Anti-Poison (P), Anti-Disease (D), and off
+- **Cleansing mode** - Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. While a mode is on, the water slot casts Poison or Disease Cleansing Totem instead of your assigned totem and shows a P or D on the icon. Assigning a water totem turns it off.
 - **Weapon slot** - Click to reapply your assigned enchant. Greys out when your weapon has no enchant.
 - **Shield slot** - Click to recast your shield. Shows charges left and can flash when you're low.
 - **Timers** on every slot, and a slot with no assigned totem shows the one you have out

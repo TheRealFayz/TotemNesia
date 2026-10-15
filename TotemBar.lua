@@ -254,7 +254,7 @@ for i, element in ipairs(elementOrder) do
             end
             -- Control hints for totem flyouts
             if this.element ~= "weapon" and this.element ~= "shield" then
-                GameTooltip:AddLine("Ctrl-click: set as slot totem", 0.6, 0.6, 0.6)
+                GameTooltip:AddLine("Right-click: set as slot totem", 0.6, 0.6, 0.6)
                 local fallbacks = TotemNesiaDB.totemBarFallbacks
                 if fallbacks and fallbacks[this.element] == this.totemName then
                     GameTooltip:AddLine("Alt-click: clear fallback", 0.6, 0.6, 0.6)
@@ -264,7 +264,7 @@ for i, element in ipairs(elementOrder) do
             elseif this.element == "shield" then
                 GameTooltip:AddLine("Click: cast and track this shield", 0.6, 0.6, 0.6)
             elseif this.element == "weapon" then
-                GameTooltip:AddLine("Ctrl-click: set as slot enchant", 0.6, 0.6, 0.6)
+                GameTooltip:AddLine("Right-click: set as slot enchant", 0.6, 0.6, 0.6)
             end
             GameTooltip:Show()
             this:SetBackdropBorderColor(1, 1, 0, 1)
@@ -275,7 +275,7 @@ for i, element in ipairs(elementOrder) do
         end)
         
         -- Click handling
-        button:RegisterForClicks("LeftButtonUp")
+        button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         button:SetScript("OnClick", function()
             if this.element == "shield" then
                 -- Shield flyout: cast it and make it the tracked shield
@@ -283,6 +283,25 @@ for i, element in ipairs(elementOrder) do
                 CastSpellByName(this.totemName)
                 TotemNesia.UpdateTotemBar()
                 TotemNesia.DebugPrint("Shield slot set to " .. this.totemName)
+                flyout.hideTime = nil
+                flyout:Hide()
+            elseif arg1 == "RightButton" then
+                -- Right-click (Shift is usually still held from opening the flyout):
+                -- assign this totem or weapon enchant to the slot
+                local elem = this.element
+                TotemNesiaDB.totemBarSlots[elem] = this.totemName
+                -- Picking a water totem turns cleansing mode off, otherwise the
+                -- P/D mode would keep covering the totem you just chose
+                if elem == "water" and TotemNesiaDB.cleansingMode then
+                    TotemNesiaDB.cleansingMode = nil
+                    DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Cleansing mode off")
+                end
+                local slotBtn = TotemNesia.totemBarSlots[elem]
+                if slotBtn then
+                    slotBtn.selectedTotem = this.totemName
+                    TotemNesia.UpdateTotemBar()
+                    TotemNesia.DebugPrint(this.totemName .. " set to " .. elem .. " slot")
+                end
                 flyout.hideTime = nil
                 flyout:Hide()
             elseif IsAltKeyDown() and this.element ~= "weapon" then
@@ -299,18 +318,6 @@ for i, element in ipairs(elementOrder) do
                     TotemNesia.DebugPrint(this.totemName .. " set as " .. elem .. " fallback")
                 end
                 TotemNesia.UpdateTotemBar()
-                flyout.hideTime = nil
-                flyout:Hide()
-            elseif IsControlKeyDown() then
-                -- Ctrl-click: Set as default totem (or weapon enchant) for this slot
-                local elem = this.element
-                TotemNesiaDB.totemBarSlots[elem] = this.totemName
-                local slotBtn = TotemNesia.totemBarSlots[elem]
-                if slotBtn then
-                    slotBtn.selectedTotem = this.totemName
-                    TotemNesia.UpdateTotemBar()
-                    TotemNesia.DebugPrint(this.totemName .. " set to " .. elem .. " slot")
-                end
                 flyout.hideTime = nil
                 flyout:Hide()
             else
@@ -393,7 +400,7 @@ for i, element in ipairs(elementOrder) do
         end
     end)
     
-    -- Slot click to cast selected totem (the weapon slot casts its Ctrl-click assigned enchant)
+    -- Slot click to cast selected totem (the weapon slot casts its assigned enchant)
     if element == "shield" then
         slot:RegisterForClicks("LeftButtonUp")
         slot:SetScript("OnClick", function()
@@ -411,8 +418,9 @@ for i, element in ipairs(elementOrder) do
         slot:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         slot:SetScript("OnClick", function()
             if arg1 == "RightButton" then
-                -- Right-click on the water slot cycles Off -> Anti-Poison -> Anti-Disease -> Off
-                if this.element == "water" then
+                -- Right-click on the water slot cycles Off -> Anti-Poison -> Anti-Disease -> Off.
+                -- Not with Shift held: that's the flyout assign click landing on the slot.
+                if this.element == "water" and not IsShiftKeyDown() then
                     TotemNesia.CycleCleansingMode()
                 end
                 return
@@ -552,7 +560,7 @@ function TotemNesia.UpdateTotemBar()
     -- Update each slot
     for element, slot in pairs(TotemNesia.totemBarSlots) do
         if element == "weapon" then
-            -- Restore saved weapon enchant selection (set with Ctrl-click in the flyout)
+            -- Restore saved weapon enchant selection (set with right-click in the flyout)
             local savedEnchant = TotemNesiaDB.totemBarSlots[element]
             if savedEnchant and not slot.selectedTotem then
                 slot.selectedTotem = savedEnchant
