@@ -774,11 +774,12 @@ function TNC.BuildOptionsUI()
         GameTooltip:Hide()
     end)
     y = y - 36
-    Check(COL_L, "Mute recall alert", "audioEnabled", true)
-    Check(COL_R, "Mute low mana alert", "manaAudioMuted")
+    -- Checked = the sound plays. The mute settings are stored inverted, so these boxes flip them.
+    Check(COL_L, "Recall alert sound", "audioEnabled")
+    Check(COL_R, "Low mana alert sound", "manaAudioMuted", true)
     y = y - 26
-    Check(COL_L, "Mute potion alert", "potionAudioMuted")
-    Check(COL_R, "Mute aggro alert", "aggroAudioMuted")
+    Check(COL_L, "Potion alert sound", "potionAudioMuted", true)
+    Check(COL_R, "Aggro alert sound", "aggroAudioMuted", true)
     y = y - 36
 
     Header("Mana Alerts")
@@ -798,14 +799,16 @@ function TNC.BuildOptionsUI()
     Check(COL_L, "Announce in parties", "publicManaParty")
     Check(COL_R, "Announce in raids", "publicManaRaid")
     y = y - 26
-    Check(COL_L, "Announce aggro", "aggroAnnounce")
-    Check(COL_R, "Announce line of sight", "losAnnounce")
+    Check(COL_L, "Announce low mana", "manaAnnounce")
+    Check(COL_R, "Announce aggro", "aggroAnnounce")
+    y = y - 26
+    Check(COL_L, "Announce line of sight", "losAnnounce")
     y = y - 30
     Slider(0, 100, 5, "publicManaThreshold",
         function(v) return "Low Mana Announcement: " .. v .. "%" end, RoundFive)
     Note("Announcements go to party chat when you're in a party and raid chat when you're in a raid. Nothing is posted when you're solo, and nothing ever goes to /say.", 40)
-    Note("Low mana: \"I am low on mana, I need to drink.\" when your mana drops below the slider. 30 second cooldown. Set to 0% to turn it off.", 30)
-    Note("Aggro: \"I have aggro!\" along with the aggro alert above.", 18)
+    Note("Low mana: \"I am low on mana, I need to drink.\" when your mana drops below the slider. 30 second cooldown.", 30)
+    Note("Aggro: \"I have aggro!\" along with the aggro alert above. At most once every 20 seconds, and the timer resets when you leave combat.", 30)
     Note("Line of sight: \"<Name>, you are out of LoS for healing.\" when a spell fails because your target in the group is out of line of sight. At most once every 5 seconds per player.", 44)
     EndPage()
 

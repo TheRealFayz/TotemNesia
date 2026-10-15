@@ -380,6 +380,9 @@ function TotemNesia.InitDB()
     if TotemNesiaDB.losAnnounce == nil then
         TotemNesiaDB.losAnnounce = true
     end
+    if TotemNesiaDB.manaAnnounce == nil then
+        TotemNesiaDB.manaAnnounce = true
+    end
     
     -- Initialize totem sets (5 sets)
     if TotemNesiaDB.totemSets == nil then

@@ -65,7 +65,7 @@ function TotemNesia.CheckManaAlerts()
         if manaPercent < publicThreshold and not TotemNesia.belowPublicManaThreshold then
             TotemNesia.belowPublicManaThreshold = true
             local channel = TotemNesia.GetAnnounceChannel()
-            if channel and TotemNesia.publicManaAlertCooldown <= 0 then
+            if channel and TotemNesiaDB.manaAnnounce and TotemNesia.publicManaAlertCooldown <= 0 then
                 SendChatMessage("I am low on mana, I need to drink.", channel)
                 TotemNesia.publicManaAlertCooldown = 30
                 TotemNesia.DebugPrint("Public mana alert sent to " .. channel .. ": " .. math.floor(manaPercent) .. "%")

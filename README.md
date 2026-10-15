@@ -20,7 +20,7 @@ Version 2.0 is a big rewrite of how the addon is put together. The old single `T
 Other changes in 2.0:
 - New settings window with four tabs: General, Totem Bar, Totem Sets, and Alerts
 - Voice alerts for Totems, Low Mana, Mana Potion, and Aggro, with four voices to choose from (Jenny, Aria, Roger, and Libby) and more to come
-- Each audio alert can be muted on its own
+- Each alert sound can be turned on or off on its own
 - New aggro alert: "You have aggro!" on screen and a voice cue when a mob is attacking you in a group
 - Group announcements for low mana, aggro, and line of sight, sent to party or raid chat (never /say)
 - Totem sets now drop every totem in one press with Nampower
@@ -124,7 +124,7 @@ TotemNesia works on a plain client. Two client mods add extra features when they
 - **Low mana alert** - Plays when your mana drops below a threshold you set (30% by default)
 - **Mana potion alert** - A second threshold to remind you to use a potion (30% by default)
 - **Aggro alert** - Plays with the aggro warning (see below)
-- **Separate mutes** - Mute any of the four alerts on its own
+- **Separate sound toggles** - Turn any of the four alert sounds on or off on its own
 - **No spam** - Each mana alert has a 30 second cooldown and only plays when you cross below the threshold. Set a threshold to 0% to turn that alert off.
 
 ### Aggro Alert
@@ -135,8 +135,8 @@ TotemNesia works on a plain client. Two client mods add extra features when they
 
 ### Group Announcements
 Messages go to party chat when you're in a party and raid chat when you're in a raid. Nothing is posted when you're solo, and nothing ever goes to /say. Parties and raids can each be turned off, for example to announce in dungeons but not raids.
-- **Low mana** - "I am low on mana, I need to drink." when your mana drops below a threshold you set (15% by default, 0% turns it off). 30 second cooldown.
-- **Aggro** - "I have aggro!" along with the aggro alert
+- **Low mana** - "I am low on mana, I need to drink." when your mana drops below a threshold you set (15% by default). 30 second cooldown.
+- **Aggro** - "I have aggro!" along with the aggro alert. At most once every 20 seconds, so a mob bouncing between you and the tank doesn't spam the group. The timer resets when you leave combat, so each new pull can announce right away.
 - **Line of sight** - "<Name>, you are out of LoS for healing." when a spell fails because a group member you have targeted is out of your line of sight. At most once every 5 seconds per player, so the tank knows to move and the group can see you tried to warn them.
 - Each announcement can be turned off on its own
 
@@ -153,7 +153,7 @@ Click the minimap button to open the settings window. Right-click and drag the b
 - **General** - Recall notification, totem tracker, totem range, which group types the addon runs in (solo, party, raid), keybind help, the recall macro, and debug mode
 - **Totem Bar** - Enable, lock, slot options, layout, flyout direction, scale, and a quick guide to the bar's clicks
 - **Totem Sets** - Build your 5 totem sets
-- **Alerts** - Voice choice, alert mutes, mana thresholds, the aggro alert, and group announcements
+- **Alerts** - Voice choice, alert sounds, mana thresholds, the aggro alert, and group announcements
 
 ## Keybinds
 

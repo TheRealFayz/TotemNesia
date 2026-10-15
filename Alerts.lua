@@ -21,18 +21,22 @@ end
 -- A mob has to stay on you for AGGRO_CONFIRM_TIME before the alert fires, so a mob that
 -- only glances at you on its way to the tank doesn't count. The alert fires once when you
 -- gain aggro, then waits until you lose it, and never repeats faster than
--- AGGRO_REALERT_TIME.
+-- AGGRO_REALERT_TIME. The "I have aggro!" chat message has its own longer cooldown,
+-- AGGRO_ANNOUNCE_COOLDOWN, so a mob bouncing between you and the tank doesn't spam the group.
+-- Both cooldowns reset when you leave combat, so the first aggro of the next pull always alerts.
 -- The alert: "You have aggro!" on screen, the Aggro voice, and "I have aggro!" in party
 -- or raid chat (each can be turned off on the Alerts tab).
 
 local AGGRO_CHECK_INTERVAL = 0.5  -- seconds between checks
 local AGGRO_CONFIRM_TIME = 1.0    -- seconds a mob must stay on you before alerting
-local AGGRO_REALERT_TIME = 10     -- minimum seconds between two aggro alerts
+local AGGRO_REALERT_TIME = 10     -- minimum seconds between two on-screen/voice aggro alerts
+local AGGRO_ANNOUNCE_COOLDOWN = 20 -- minimum seconds between two "I have aggro!" chat messages (resets out of combat)
 
 local aggroElapsed = 0
 local aggroSince = nil     -- when the current aggro started
 local aggroAlerted = false -- already alerted for the current aggro
 local lastAggroAlert = 0
+local lastAggroAnnounce = 0
 
 -- True if this unit is a living hostile mob that is targeting the player
 local function IsTargetingMe(unit)
@@ -93,6 +97,12 @@ end
 function TotemNesia.CheckAggro()
     -- Only while the alert is on, you're alive, in combat, and in a group.
     -- Solo you nearly always have aggro, so alerting there would be noise.
+    -- Leaving combat resets both cooldowns, so the next pull starts fresh
+    if not UnitAffectingCombat("player") then
+        lastAggroAlert = 0
+        lastAggroAnnounce = 0
+    end
+
     local inGroup = GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0
     if not TotemNesiaDB or not TotemNesiaDB.aggroAlert or not inGroup
         or not UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then
@@ -121,10 +131,13 @@ function TotemNesia.CheckAggro()
     if not TotemNesiaDB.aggroAudioMuted then
         TotemNesia.PlayAlertSound("Aggro")
     end
-    if TotemNesiaDB.aggroAnnounce then
+    -- Chat has its own, longer cooldown: when a mob keeps bouncing between you and the
+    -- tank, you still get the on-screen warning but the group isn't spammed.
+    if TotemNesiaDB.aggroAnnounce and (now - lastAggroAnnounce) >= AGGRO_ANNOUNCE_COOLDOWN then
         local channel = TotemNesia.GetAnnounceChannel()
         if channel then
             SendChatMessage("I have aggro!", channel)
+            lastAggroAnnounce = now
         end
     end
     TotemNesia.DebugPrint("Aggro alert")
