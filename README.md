@@ -95,7 +95,7 @@ Something not working? Check [Troubleshooting.md](Troubleshooting.md) first. Fou
 
 This addon is provided as-is for use with OctoWoW. If you'd like to edit or fork it, feel free to reach out.
 
-**Please keep forks private.** Public copies floating around make it hard for people to tell which version is the original one and where to get updates or report bugs. If you want your own copy to tinker with, please clone it into a private repo. If you have a change or feature you think everyone would benefit from, pleaese open an issue and we can look at getting it into the main addon.
+**Please keep forks private.** Public copies floating around make it hard for people to tell which version is the original one and where to get updates or report bugs. If you want your own copy to tinker with, please clone it into a private repo. If you have a change or feature you think everyone would benefit from, please open an issue and we can look at getting it into the main addon.
 
 Special thanks to all the testers and community members who gave feedback during development.
 

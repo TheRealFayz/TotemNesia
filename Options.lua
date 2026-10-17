@@ -930,6 +930,20 @@ function TNC.BuildOptionsUI()
         Try(api.SkinButton, flyoutButton)
         Try(api.SkinButton, bindButton)
         Try(api.SkinDropDown, voiceDropDown, nil, nil, nil, true)
+        -- pfUI draws the dropdown's box on a child frame of the dropdown, and a child
+        -- frame always draws on top of its parent, so the box covered the voice name
+        -- (same problem the checkboxes had). Hand the box to the page instead, one level
+        -- below the dropdown, so the name draws on top of it.
+        local box = voiceDropDown.backdrop
+        if box then
+            local page = voiceDropDown:GetParent()
+            box:SetParent(page)
+            box:SetFrameLevel(page:GetFrameLevel())
+            -- With pfUI's Blizzard-style borders on, the border is one more frame on top
+            if voiceDropDown.backdrop_border then
+                voiceDropDown.backdrop_border:SetFrameLevel(page:GetFrameLevel())
+            end
+        end
     end
 
     function ui.RefreshAll()
