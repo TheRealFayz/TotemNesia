@@ -155,34 +155,63 @@ end)
 -- ============================================================================
 -- LINE OF SIGHT ANNOUNCEMENT
 -- ============================================================================
--- When a spell fails with "Target not in line of sight" and your target is a player in
--- your group, the group is told: "<Name>, you are out of LoS for healing." It goes to party
--- or raid chat so the whole group sees that the healer tried to warn them. Each player is
--- announced at most once every LOS_COOLDOWN seconds, so chain-casting into a pillar
--- doesn't spam chat.
+-- When a spell fails with "Target not in line of sight" on a player in your group, the
+-- group is told: "<Name>, you are out of LoS for healing." It goes to party or raid chat
+-- so the whole group sees that the healer tried to warn them. Each player is announced
+-- at most once every LOS_COOLDOWN seconds, so chain-casting into a pillar doesn't spam chat.
+--
+-- Who you were healing: the unit under your mouse if it's a group member (mouseover
+-- macros and click-casting on raid frames don't change your target), otherwise your
+-- target. The error itself doesn't say who the spell was for, so this is a best guess.
 
 local LOS_COOLDOWN = 5
 local LOS_ERROR = SPELL_FAILED_LINE_OF_SIGHT or "Target not in line of sight"
 local lastLosWarning = {}  -- player name -> time of last announcement
 
+-- True for another player in your party or raid
+local function IsGroupPlayer(unit)
+    if not UnitExists(unit) or not UnitIsPlayer(unit) or UnitIsUnit(unit, "player") then
+        return false
+    end
+    if GetNumRaidMembers() > 0 then
+        for i = 1, GetNumRaidMembers() do
+            if UnitIsUnit(unit, "raid" .. i) then
+                return true
+            end
+        end
+        return false
+    end
+    for i = 1, GetNumPartyMembers() do
+        if UnitIsUnit(unit, "party" .. i) then
+            return true
+        end
+    end
+    return false
+end
+
 local losFrame = CreateFrame("Frame")
 losFrame:RegisterEvent("UI_ERROR_MESSAGE")
 losFrame:SetScript("OnEvent", function()
-    if arg1 ~= LOS_ERROR or not TotemNesiaDB or not TotemNesiaDB.losAnnounce then
+    if not arg1 or not TotemNesiaDB or not TotemNesiaDB.losAnnounce then
         return
     end
-    -- Only for a friendly player in your group (not you, not an enemy behind a pillar)
-    if not UnitExists("target") or not UnitIsPlayer("target") or UnitIsUnit("target", "player")
-        or not UnitIsFriend("player", "target") then
+    if arg1 ~= LOS_ERROR and not string.find(string.lower(arg1), "line of sight") then
         return
     end
-    local inGroup = (UnitInRaid and UnitInRaid("target")) or (UnitInParty and UnitInParty("target"))
-    if not inGroup then
+    local unit = nil
+    if IsGroupPlayer("mouseover") then
+        unit = "mouseover"
+    elseif IsGroupPlayer("target") then
+        unit = "target"
+    end
+    if not unit then
+        TotemNesia.DebugPrint("Line of sight error, but no group member under the mouse or targeted")
         return
     end
     local channel = TotemNesia.GetAnnounceChannel()
-    local name = UnitName("target")
+    local name = UnitName(unit)
     if not channel or not name then
+        TotemNesia.DebugPrint("Line of sight error, but announcements are off for this group type")
         return
     end
     local now = GetTime()

@@ -58,7 +58,9 @@ Type `/tn` to open the settings window, or `/tn bind` to start Key Bind Mode.
 - With SuperWoW, turn on enemy nameplates (V key) so it can see mobs nobody in your group has targeted
 
 **The line of sight message isn't sent**
-- Your target has to be a player in your group. Healing through mouseover or click-cast addons doesn't change your target, so the addon can't tell who you were healing.
+- The player you were healing has to be in your group. The addon checks the player under your mouse first (for mouseover macros and click-casting on raid frames), then your target.
+- If you heal with a keybind while your mouse is over someone else's frame, the warning goes to the player under the mouse
+- Turn on Debug mode (General tab) to see in chat why a warning wasn't sent
 - Check "Announce in parties" or "Announce in raids" and "Announce line of sight" on the Alerts tab
 
 ## Appearance
