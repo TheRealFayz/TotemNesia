@@ -1,0 +1,14 @@
+name: Sync octowow mirror
+on:
+  push:
+  release:
+    types: [published]
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger mirror sync
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: token ${{ secrets.OCTOWOW_GITEA_TOKEN }}" \
+            https://octowow.st/git/api/v1/repos/Fayz/TotemNesia/mirror-sync
