@@ -838,7 +838,7 @@ function TNC.BuildOptionsUI()
     y = y - 30
     Slider(0, 100, 5, "publicManaThreshold",
         function(v) return "Low Mana Announcement: " .. v .. "%" end, RoundFive)
-    Note("Posted to party or raid chat, never /say, and never when solo. Low mana: \"I am low on mana, I need to drink.\" Aggro: \"I have aggro!\" (at most every 20s). Line of sight: \"<Name>, you are out of LoS for healing.\" (at most every 5s per player).", 66)
+    Note("Posted to party or raid chat, never /say, and never when solo. Low mana: \"I am low on mana, I need to drink.\" Aggro: \"I have aggro!\" (at most every 20s). Line of sight: \"<Name>, you are out of LoS for healing.\" (at most every 20s per player).", 66)
     EndPage()
 
     -- ------------------------------------------------------------------

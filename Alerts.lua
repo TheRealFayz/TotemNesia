@@ -158,13 +158,17 @@ end)
 -- When a spell fails with "Target not in line of sight" on a player in your group, the
 -- group is told: "<Name>, you are out of LoS for healing." It goes to party or raid chat
 -- so the whole group sees that the healer tried to warn them. Each player is announced
--- at most once every LOS_COOLDOWN seconds, so chain-casting into a pillar doesn't spam chat.
+-- at most once every LOS_COOLDOWN seconds, so clicking a heal again while they're still
+-- behind the pillar doesn't spam chat. The timers clear when you leave combat, so the
+-- next fight can warn them right away.
 --
 -- Who you were healing: the unit under your mouse if it's a group member (mouseover
 -- macros and click-casting on raid frames don't change your target), otherwise your
 -- target. The error itself doesn't say who the spell was for, so this is a best guess.
 
-local LOS_COOLDOWN = 5
+local LOS_COOLDOWN = 20
+local LOS_ANY_COOLDOWN = 3  -- and nothing at all within 3 seconds of the last one, whoever it was for
+local lastLosAny = 0
 local LOS_ERROR = SPELL_FAILED_LINE_OF_SIGHT or "Target not in line of sight"
 local lastLosWarning = {}  -- player name -> time of last announcement
 
@@ -191,7 +195,13 @@ end
 
 local losFrame = CreateFrame("Frame")
 losFrame:RegisterEvent("UI_ERROR_MESSAGE")
+losFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 losFrame:SetScript("OnEvent", function()
+    if event == "PLAYER_REGEN_ENABLED" then
+        lastLosWarning = {}  -- left combat: next fight starts fresh
+        lastLosAny = 0
+        return
+    end
     if not arg1 or not TotemNesiaDB or not TotemNesiaDB.losAnnounce then
         return
     end
@@ -215,10 +225,15 @@ losFrame:SetScript("OnEvent", function()
         return
     end
     local now = GetTime()
+    if (now - lastLosAny) < LOS_ANY_COOLDOWN then
+        return
+    end
     if lastLosWarning[name] and (now - lastLosWarning[name]) < LOS_COOLDOWN then
+        TotemNesia.DebugPrint("Line of sight warning for " .. name .. " skipped, sent " .. math.floor(now - lastLosWarning[name]) .. "s ago")
         return
     end
     lastLosWarning[name] = now
+    lastLosAny = now
     SendChatMessage(name .. ", you are out of LoS for healing.", channel)
     TotemNesia.DebugPrint("Line of sight warning sent for " .. name)
 end)
