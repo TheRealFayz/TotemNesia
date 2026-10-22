@@ -4,6 +4,8 @@
 
 TotemNesia tracks your totems, gives you a quick-cast totem bar, and reminds you to recall your totems after combat or when you walk away from them. **Never be that Shaman that causes an accidental totem pull again.**
 
+You can also download SHPlates from OctoWoW's [Gitea](https://octowow.st/git/Fayz/TotemNesia).
+
 ## What's New in 2.0
 
 - The addon is split into separate files by feature, which makes it much easier to maintain and fix
