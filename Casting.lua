@@ -93,17 +93,17 @@ end
 -- Sequential totem casting function
 function TotemNesia.CastNextTotem(setNumber)
     -- Safety checks
-    if not TotemNesiaDB or not TotemNesiaDB.totemSets then
+    if not TotemNesiaCharDB or not TotemNesiaCharDB.totemSets then
         TotemNesia.DebugPrint("Database not initialized")
         return
     end
     
-    if not TotemNesiaDB.totemSets[setNumber] then
+    if not TotemNesiaCharDB.totemSets[setNumber] then
         TotemNesia.DebugPrint("Set " .. setNumber .. " not found")
         return
     end
     
-    local set = TotemNesiaDB.totemSets[setNumber]
+    local set = TotemNesiaCharDB.totemSets[setNumber]
     
     -- Totems that are already down (same totem, more than 10 seconds left, and you're in
     -- range) are skipped, so pressing the key again only drops what's missing or expiring.
@@ -160,7 +160,7 @@ function TotemNesia_CastNextTotem(setNumber)
     end
     
     if not setNumber then
-        setNumber = TotemNesiaDB.currentTotemSet or 1
+        setNumber = TotemNesiaCharDB.currentTotemSet or 1
     end
     
     TotemNesia.CastNextTotem(setNumber)

@@ -86,7 +86,7 @@ totemBar:Hide()  -- Hidden by default until enabled
 -- Make Totem Bar draggable when unlocked
 totemBar:RegisterForDrag("LeftButton")
 totemBar:SetScript("OnDragStart", function()
-    if not TotemNesiaDB.totemBarLocked then
+    if not TotemNesiaCharDB.totemBarLocked then
         this:StartMoving()
     end
 end)
@@ -255,7 +255,7 @@ for i, element in ipairs(elementOrder) do
             -- Control hints for totem flyouts
             if this.element ~= "weapon" and this.element ~= "shield" then
                 GameTooltip:AddLine("Right-click: set as slot totem", 0.6, 0.6, 0.6)
-                local fallbacks = TotemNesiaDB.totemBarFallbacks
+                local fallbacks = TotemNesiaCharDB.totemBarFallbacks
                 if fallbacks and fallbacks[this.element] == this.totemName then
                     GameTooltip:AddLine("Alt-click: clear fallback", 0.6, 0.6, 0.6)
                 else
@@ -279,7 +279,7 @@ for i, element in ipairs(elementOrder) do
         button:SetScript("OnClick", function()
             if this.element == "shield" then
                 -- Shield flyout: cast it and make it the tracked shield
-                TotemNesiaDB.shieldSpell = this.totemName
+                TotemNesiaCharDB.shieldSpell = this.totemName
                 CastSpellByName(this.totemName)
                 TotemNesia.UpdateTotemBar()
                 TotemNesia.DebugPrint("Shield slot set to " .. this.totemName)
@@ -289,14 +289,14 @@ for i, element in ipairs(elementOrder) do
                 -- Right-click (Shift is usually still held from opening the flyout):
                 -- assign this totem or weapon enchant to the slot
                 local elem = this.element
-                TotemNesiaDB.totemBarSlots[elem] = this.totemName
+                TotemNesiaCharDB.totemBarSlots[elem] = this.totemName
                 -- Picking a water or earth totem turns that slot's mode off, otherwise
                 -- the P/D/T mode would keep covering the totem you just chose
-                if elem == "water" and TotemNesiaDB.cleansingMode then
-                    TotemNesiaDB.cleansingMode = nil
+                if elem == "water" and TotemNesiaCharDB.cleansingMode then
+                    TotemNesiaCharDB.cleansingMode = nil
                     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Cleansing mode off")
-                elseif elem == "earth" and TotemNesiaDB.tremorMode then
-                    TotemNesiaDB.tremorMode = nil
+                elseif elem == "earth" and TotemNesiaCharDB.tremorMode then
+                    TotemNesiaCharDB.tremorMode = nil
                     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode off")
                 end
                 local slotBtn = TotemNesia.totemBarSlots[elem]
@@ -310,14 +310,14 @@ for i, element in ipairs(elementOrder) do
             elseif IsAltKeyDown() and this.element ~= "weapon" then
                 -- Alt-click: set (or clear) the fallback totem for this slot
                 local elem = this.element
-                if not TotemNesiaDB.totemBarFallbacks then
-                    TotemNesiaDB.totemBarFallbacks = {}
+                if not TotemNesiaCharDB.totemBarFallbacks then
+                    TotemNesiaCharDB.totemBarFallbacks = {}
                 end
-                if TotemNesiaDB.totemBarFallbacks[elem] == this.totemName then
-                    TotemNesiaDB.totemBarFallbacks[elem] = nil
+                if TotemNesiaCharDB.totemBarFallbacks[elem] == this.totemName then
+                    TotemNesiaCharDB.totemBarFallbacks[elem] = nil
                     TotemNesia.DebugPrint("Fallback cleared for " .. elem .. " slot")
                 else
-                    TotemNesiaDB.totemBarFallbacks[elem] = this.totemName
+                    TotemNesiaCharDB.totemBarFallbacks[elem] = this.totemName
                     TotemNesia.DebugPrint(this.totemName .. " set as " .. elem .. " fallback")
                 end
                 TotemNesia.UpdateTotemBar()
@@ -342,7 +342,7 @@ for i, element in ipairs(elementOrder) do
     -- Slot mouse events for flyout
     slot:SetScript("OnEnter", function()
         -- Require shift key unless disabled in settings
-        if not TotemNesiaDB.shiftToOpenFlyouts and not IsShiftKeyDown() then
+        if not TotemNesiaCharDB.shiftToOpenFlyouts and not IsShiftKeyDown() then
             return
         end
         
@@ -440,7 +440,7 @@ for i, element in ipairs(elementOrder) do
     -- Make slot draggable and propagate to parent totemBar
     slot:RegisterForDrag("LeftButton")
     slot:SetScript("OnDragStart", function()
-        if not TotemNesiaDB.totemBarLocked then
+        if not TotemNesiaCharDB.totemBarLocked then
             totemBar:StartMoving()
         end
     end)
@@ -481,12 +481,12 @@ function TotemNesia.UpdateTotemBarKeybinds()
                 keyText = string.gsub(keyText, "BUTTON", "M")
                 
                 -- Debug: Print what we found (only if debug mode is explicitly enabled)
-                if TotemNesiaDB and TotemNesiaDB.debugMode == true then
+                if TotemNesiaCharDB and TotemNesiaCharDB.debugMode == true then
                     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: " .. element .. " keybind = " .. keyText)
                 end
             else
                 -- Debug: No binding found (only if debug mode is explicitly enabled)
-                if TotemNesiaDB and TotemNesiaDB.debugMode == true then
+                if TotemNesiaCharDB and TotemNesiaCharDB.debugMode == true then
                     DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: No keybind found for " .. element)
                 end
             end
@@ -501,10 +501,10 @@ TNC.BAR_ORDER = {"fire", "earth", "water", "air", "weapon", "shield"}
 
 -- Which totem bar slots are visible
 function TNC.IsSlotVisible(element)
-    if element == "weapon" and TotemNesiaDB.hideWeaponSlot then
+    if element == "weapon" and TotemNesiaCharDB.hideWeaponSlot then
         return false
     end
-    if element == "shield" and TotemNesiaDB.hideShieldSlot then
+    if element == "shield" and TotemNesiaCharDB.hideShieldSlot then
         return false
     end
     return true
@@ -512,7 +512,7 @@ end
 
 -- Function to update Totem Bar display and timers
 function TotemNesia.UpdateTotemBar()
-    if not TotemNesiaDB.totemBarEnabled or TotemNesiaDB.totemBarHidden then
+    if not TotemNesiaCharDB.totemBarEnabled or TotemNesiaCharDB.totemBarHidden then
         totemBar:Hide()
         return
     end
@@ -520,13 +520,13 @@ function TotemNesia.UpdateTotemBar()
     totemBar:Show()
     
     -- Apply layout (Horizontal or Vertical)
-    local isVertical = (TotemNesiaDB.totemBarLayout == "Vertical")
+    local isVertical = (TotemNesiaCharDB.totemBarLayout == "Vertical")
     local slotSize = 24
     local slotSpacing = 1
     local elementOrder = TNC.BAR_ORDER
     
     -- Only re-place the slots when a layout setting changed (this runs twice a second)
-    local layoutKey = tostring(TotemNesiaDB.totemBarLayout) .. (TotemNesiaDB.hideWeaponSlot and "1" or "0") .. (TotemNesiaDB.hideShieldSlot and "1" or "0")
+    local layoutKey = tostring(TotemNesiaCharDB.totemBarLayout) .. (TotemNesiaCharDB.hideWeaponSlot and "1" or "0") .. (TotemNesiaCharDB.hideShieldSlot and "1" or "0")
     if TNC.lastBarLayout ~= layoutKey then
         TNC.lastBarLayout = layoutKey
     
@@ -569,7 +569,7 @@ function TotemNesia.UpdateTotemBar()
     for element, slot in pairs(TotemNesia.totemBarSlots) do
         if element == "weapon" then
             -- Restore saved weapon enchant selection (set with right-click in the flyout)
-            local savedEnchant = TotemNesiaDB.totemBarSlots[element]
+            local savedEnchant = TotemNesiaCharDB.totemBarSlots[element]
             if savedEnchant and not slot.selectedTotem then
                 slot.selectedTotem = savedEnchant
             end
@@ -658,7 +658,7 @@ function TotemNesia.UpdateTotemBar()
             
         else
             -- Restore saved totem selection for totem slots
-            local savedTotem = TotemNesiaDB.totemBarSlots[element]
+            local savedTotem = TotemNesiaCharDB.totemBarSlots[element]
             if savedTotem and not slot.selectedTotem then
                 slot.selectedTotem = savedTotem
             end
@@ -668,11 +668,11 @@ function TotemNesia.UpdateTotemBar()
             
             -- Mode letter on the water and earth slots
             if slot.modeText then
-                if element == "water" and TotemNesiaDB.cleansingMode == "poison" then
+                if element == "water" and TotemNesiaCharDB.cleansingMode == "poison" then
                     slot.modeText:SetText("P")
-                elseif element == "water" and TotemNesiaDB.cleansingMode == "disease" then
+                elseif element == "water" and TotemNesiaCharDB.cleansingMode == "disease" then
                     slot.modeText:SetText("D")
-                elseif element == "earth" and TotemNesiaDB.tremorMode then
+                elseif element == "earth" and TotemNesiaCharDB.tremorMode then
                     slot.modeText:SetText("T")
                 else
                     slot.modeText:SetText("")
@@ -681,7 +681,7 @@ function TotemNesia.UpdateTotemBar()
             
             -- Fallback badge
             if slot.fallbackBadge then
-                local fallback = TotemNesiaDB.totemBarFallbacks and TotemNesiaDB.totemBarFallbacks[element]
+                local fallback = TotemNesiaCharDB.totemBarFallbacks and TotemNesiaCharDB.totemBarFallbacks[element]
                 if fallback and TotemNesia.IsTotemLearned(fallback) then
                     TNC.SetIcon(slot.fallbackBadge, TotemNesia.GetTotemIcon(fallback))
                     slot.fallbackBadge:Show()
@@ -759,11 +759,11 @@ end
 
 -- Toggle Tremor mode on the earth slot (only turns on once Tremor Totem is learned)
 function TotemNesia.ToggleTremorMode()
-    if TotemNesiaDB.tremorMode then
-        TotemNesiaDB.tremorMode = nil
+    if TotemNesiaCharDB.tremorMode then
+        TotemNesiaCharDB.tremorMode = nil
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode off")
     elseif TotemNesia.IsTotemLearned(TNC.TREMOR) then
-        TotemNesiaDB.tremorMode = true
+        TotemNesiaCharDB.tremorMode = true
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode on (earth slot casts Tremor Totem)")
     else
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Tremor mode needs Tremor Totem learned")
@@ -773,7 +773,7 @@ end
 
 -- Cycle the water slot between Off, Anti-Poison, and Anti-Disease (skips unlearned totems)
 function TotemNesia.CycleCleansingMode()
-    local current = TotemNesiaDB.cleansingMode
+    local current = TotemNesiaCharDB.cleansingMode
     local nextMode = nil
     if current == nil then
         if TotemNesia.IsTotemLearned(TNC.CLEANSING.poison) then
@@ -786,7 +786,7 @@ function TotemNesia.CycleCleansingMode()
             nextMode = "disease"
         end
     end
-    TotemNesiaDB.cleansingMode = nextMode
+    TotemNesiaCharDB.cleansingMode = nextMode
     if nextMode == "poison" then
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia: Anti-Poison mode on (water slot casts Poison Cleansing Totem)")
     elseif nextMode == "disease" then
@@ -835,7 +835,7 @@ TNC.fastFrame:SetScript("OnUpdate", function()
         end
         -- Low shield flash on the shield slot border
         if element == "shield" then
-            if slot.shieldLow and TotemNesiaDB.shieldFlash and not UnitIsDeadOrGhost("player") then
+            if slot.shieldLow and TotemNesiaCharDB.shieldFlash and not UnitIsDeadOrGhost("player") then
                 local pulse = 0.5 + 0.5 * math.sin(now * 6)
                 slot:SetBackdropBorderColor(1, 0.2 * pulse, 0.2 * pulse, 1)
             else
@@ -848,7 +848,7 @@ end)
 -- Lay out every flyout: show only learned spells, size the flyout to fit them, and anchor it
 -- on the side picked in settings (Up/Down stack vertically, Left/Right sit side by side).
 function TotemNesia.UpdateTotemBarFlyouts()
-    local direction = TotemNesiaDB.totemBarFlyoutDirection or "Up"
+    local direction = TotemNesiaCharDB.totemBarFlyoutDirection or "Up"
     local iconSize = 24
     local iconSpacing = 2
     local isVerticalFlyout = (direction == "Up" or direction == "Down")
@@ -916,7 +916,7 @@ totemTracker:Hide()
 -- Make Totem Tracker draggable when unlocked
 totemTracker:RegisterForDrag("LeftButton")
 totemTracker:SetScript("OnDragStart", function()
-    if not TotemNesiaDB.totemTrackerLocked then
+    if not TotemNesiaCharDB.totemTrackerLocked then
         this:StartMoving()
     end
 end)
@@ -977,7 +977,7 @@ function TotemNesia.UpdateTotemTracker()
         activeCount = activeCount + 1
     end
     
-    if activeCount == 0 or TotemNesiaDB.totemTrackerHidden then
+    if activeCount == 0 or TotemNesiaCharDB.totemTrackerHidden then
         totemTracker:Hide()
         return
     end
@@ -985,7 +985,7 @@ function TotemNesia.UpdateTotemTracker()
     -- Create/update icons for active totems only
     local iconSize = 20
     local iconSpacing = 1
-    local isVertical = (TotemNesiaDB.totemTrackerLayout == "Vertical")
+    local isVertical = (TotemNesiaCharDB.totemTrackerLayout == "Vertical")
     
     if isVertical then
         local totalHeight = (activeCount * iconSize) + ((activeCount - 1) * iconSpacing)

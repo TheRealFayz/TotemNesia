@@ -246,12 +246,12 @@ function TNC.BuildOptionsUI()
         cb:SetScript("OnClick", function()
             local checked = this:GetChecked() and true or false
             if this.invert then
-                TotemNesiaDB[this.dbKey] = not checked
+                TotemNesiaCharDB[this.dbKey] = not checked
             else
-                TotemNesiaDB[this.dbKey] = checked
+                TotemNesiaCharDB[this.dbKey] = checked
             end
             if this.onChange then
-                this.onChange(TotemNesiaDB[this.dbKey])
+                this.onChange(TotemNesiaCharDB[this.dbKey])
             end
         end)
         table.insert(checkboxes, cb)
@@ -283,7 +283,7 @@ function TNC.BuildOptionsUI()
         slider.onChange = onChange
         slider:SetScript("OnValueChanged", function()
             local value = this.round(this:GetValue())
-            TotemNesiaDB[this.dbKey] = value
+            TotemNesiaCharDB[this.dbKey] = value
             this.label:SetText(this.format(value))
             if this.onChange then
                 this.onChange(value)
@@ -515,32 +515,32 @@ function TNC.BuildOptionsUI()
     flyoutButton:SetText("Up")
 
     layoutButton:SetScript("OnClick", function()
-        if TotemNesiaDB.totemBarLayout == "Horizontal" then
+        if TotemNesiaCharDB.totemBarLayout == "Horizontal" then
             -- Vertical layout defaults its flyouts to the right
-            TotemNesiaDB.totemBarLayout = "Vertical"
-            TotemNesiaDB.totemBarFlyoutDirection = "Right"
+            TotemNesiaCharDB.totemBarLayout = "Vertical"
+            TotemNesiaCharDB.totemBarFlyoutDirection = "Right"
         else
             -- Horizontal layout defaults its flyouts upward
-            TotemNesiaDB.totemBarLayout = "Horizontal"
-            TotemNesiaDB.totemBarFlyoutDirection = "Up"
+            TotemNesiaCharDB.totemBarLayout = "Horizontal"
+            TotemNesiaCharDB.totemBarFlyoutDirection = "Up"
         end
-        this:SetText(TotemNesiaDB.totemBarLayout)
-        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection)
-        TotemNesia.DebugPrint("Layout changed to " .. TotemNesiaDB.totemBarLayout .. ", flyout direction set to " .. TotemNesiaDB.totemBarFlyoutDirection)
+        this:SetText(TotemNesiaCharDB.totemBarLayout)
+        flyoutButton:SetText(TotemNesiaCharDB.totemBarFlyoutDirection)
+        TotemNesia.DebugPrint("Layout changed to " .. TotemNesiaCharDB.totemBarLayout .. ", flyout direction set to " .. TotemNesiaCharDB.totemBarFlyoutDirection)
         TotemNesia.UpdateTotemBar()
         TotemNesia.UpdateTotemBarFlyouts()
     end)
 
     flyoutButton:SetScript("OnClick", function()
-        local direction = TotemNesiaDB.totemBarFlyoutDirection
-        if TotemNesiaDB.totemBarLayout == "Vertical" then
+        local direction = TotemNesiaCharDB.totemBarFlyoutDirection
+        if TotemNesiaCharDB.totemBarLayout == "Vertical" then
             -- Vertical layout: cycle between Left and Right
             if direction == "Left" then direction = "Right" else direction = "Left" end
         else
             -- Horizontal layout: cycle between Up and Down
             if direction == "Up" then direction = "Down" else direction = "Up" end
         end
-        TotemNesiaDB.totemBarFlyoutDirection = direction
+        TotemNesiaCharDB.totemBarFlyoutDirection = direction
         this:SetText(direction)
         TotemNesia.UpdateTotemBarFlyouts()
     end)
@@ -617,7 +617,7 @@ function TNC.BuildOptionsUI()
         btn:SetText(tostring(i))
         btn.setNumber = i
         btn:SetScript("OnClick", function()
-            TotemNesiaDB.currentTotemSet = this.setNumber
+            TotemNesiaCharDB.currentTotemSet = this.setNumber
             TotemNesia.DebugPrint("Selected Set " .. this.setNumber)
             ui.RefreshSetsTab()
         end)
@@ -642,10 +642,10 @@ function TNC.BuildOptionsUI()
 
     -- Gold border on the totem picked for the current set, for one element
     local function UpdateSetBorders(element)
-        if not TotemNesiaDB or not TotemNesiaDB.totemSets then
+        if not TotemNesiaCharDB or not TotemNesiaCharDB.totemSets then
             return
         end
-        local set = TotemNesiaDB.totemSets[TotemNesiaDB.currentTotemSet or 1]
+        local set = TotemNesiaCharDB.totemSets[TotemNesiaCharDB.currentTotemSet or 1]
         if not set then
             return
         end
@@ -662,7 +662,7 @@ function TNC.BuildOptionsUI()
 
     -- Refresh set highlight and all borders (called when the tab opens or a set changes)
     function ui.RefreshSetsTab()
-        local current = (TotemNesiaDB and TotemNesiaDB.currentTotemSet) or 1
+        local current = (TotemNesiaCharDB and TotemNesiaCharDB.currentTotemSet) or 1
         for j = 1, 5 do
             if j == current then
                 setButtons[j]:LockHighlight()
@@ -712,8 +712,8 @@ function TNC.BuildOptionsUI()
         end)
         clearBtn:SetScript("OnLeave", HideTooltip)
         clearBtn:SetScript("OnClick", function()
-            local set = TotemNesiaDB.currentTotemSet
-            TotemNesiaDB.totemSets[set][this.element] = nil
+            local set = TotemNesiaCharDB.currentTotemSet
+            TotemNesiaCharDB.totemSets[set][this.element] = nil
             TotemNesia.DebugPrint("Cleared Set " .. set .. " " .. this.title .. " totem")
             UpdateSetBorders(this.element)
         end)
@@ -746,8 +746,8 @@ function TNC.BuildOptionsUI()
             btn:SetScript("OnEnter", TotemTooltip)
             btn:SetScript("OnLeave", HideTooltip)
             btn:SetScript("OnClick", function()
-                local set = TotemNesiaDB.currentTotemSet
-                TotemNesiaDB.totemSets[set][this.element] = this.totemName
+                local set = TotemNesiaCharDB.currentTotemSet
+                TotemNesiaCharDB.totemSets[set][this.element] = this.totemName
                 TotemNesia.DebugPrint("Set " .. set .. " " .. this.title .. " = " .. this.totemName)
                 UpdateSetBorders(this.element)
             end)
@@ -776,9 +776,9 @@ function TNC.BuildOptionsUI()
             local info = {}
             info.text = name
             info.value = name
-            info.checked = (TotemNesiaDB and TotemNesiaDB.alertVoice == name)
+            info.checked = (TotemNesiaCharDB and TotemNesiaCharDB.alertVoice == name)
             info.func = function()
-                TotemNesiaDB.alertVoice = this.value
+                TotemNesiaCharDB.alertVoice = this.value
                 UIDropDownMenu_SetText(this.value, TotemNesiaVoiceDropDown)
             end
             UIDropDownMenu_AddButton(info)
@@ -851,7 +851,7 @@ function TNC.BuildOptionsUI()
     -- tracker, and recall notification have their own skin at the end of TotemBar.lua.
     -- ------------------------------------------------------------------
     function ui.ApplyPfUISkin()
-        if ui.pfSkinned or not TotemNesiaDB.pfuiSkin then
+        if ui.pfSkinned or not TotemNesiaCharDB.pfuiSkin then
             return
         end
         if not (pfUI and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config) then
@@ -949,22 +949,22 @@ function TNC.BuildOptionsUI()
     function ui.RefreshAll()
         ui.ApplyPfUISkin()
         for _, cb in ipairs(checkboxes) do
-            local value = TotemNesiaDB[cb.dbKey]
+            local value = TotemNesiaCharDB[cb.dbKey]
             if cb.invert then
                 value = not value
             end
             cb:SetChecked(value)
         end
         for _, slider in ipairs(sliders) do
-            local value = TotemNesiaDB[slider.dbKey]
+            local value = TotemNesiaCharDB[slider.dbKey]
             if value then
                 slider:SetValue(value)
                 slider.label:SetText(slider.format(value))
             end
         end
-        layoutButton:SetText(TotemNesiaDB.totemBarLayout or "Horizontal")
-        flyoutButton:SetText(TotemNesiaDB.totemBarFlyoutDirection or "Up")
-        UIDropDownMenu_SetText(TotemNesiaDB.alertVoice or "Jenny", voiceDropDown)
+        layoutButton:SetText(TotemNesiaCharDB.totemBarLayout or "Horizontal")
+        flyoutButton:SetText(TotemNesiaCharDB.totemBarFlyoutDirection or "Up")
+        UIDropDownMenu_SetText(TotemNesiaCharDB.alertVoice or "Jenny", voiceDropDown)
         SelectTab(1)
     end
 end
@@ -973,13 +973,13 @@ TNC.BuildOptionsUI()
 
 -- Update minimap button position
 function TotemNesia.UpdateMinimapButton()
-    local angle = math.rad(TotemNesiaDB.minimapPos or 180)
+    local angle = math.rad(TotemNesiaCharDB.minimapPos or 180)
     local x = math.cos(angle) * 80
     local y = math.sin(angle) * 80
     minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
     
     -- Ensure button is visible unless explicitly hidden
-    if not TotemNesiaDB.minimapHidden then
+    if not TotemNesiaCharDB.minimapHidden then
         minimapButton:Show()
     end
 end
@@ -1039,7 +1039,7 @@ minimapButton:SetScript("OnDragStart", function()
         px, py = px / scale, py / scale
         
         local angle = math.deg(math.atan2(py - my, px - mx))
-        TotemNesiaDB.minimapPos = angle
+        TotemNesiaCharDB.minimapPos = angle
         TotemNesia.UpdateMinimapButton()
     end)
 end)

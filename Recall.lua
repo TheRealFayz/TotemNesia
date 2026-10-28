@@ -107,7 +107,7 @@ TotemNesia.elementalIcons = elementalIcons
 -- Make frame draggable
 iconFrame:RegisterForDrag("LeftButton")
 iconFrame:SetScript("OnDragStart", function()
-    if not TotemNesiaDB.isLocked then
+    if not TotemNesiaCharDB.isLocked then
         this:StartMoving()
     end
 end)
@@ -119,7 +119,7 @@ end)
 iconFrame:SetScript("OnClick", function()
     TotemNesia.DebugPrint("Icon clicked")
     
-    if TotemNesiaDB.isLocked and iconFrame:IsVisible() then
+    if TotemNesiaCharDB.isLocked and iconFrame:IsVisible() then
         local info = TotemNesia.GetCachedSpell("Totemic Recall")
         if info then
             CastSpell(info.id, BOOKTYPE_SPELL)

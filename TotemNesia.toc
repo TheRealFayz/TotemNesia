@@ -4,6 +4,7 @@
 ## Author: Fayz
 ## Version: 2.0
 ## SavedVariables: TotemNesiaDB
+## SavedVariablesPerCharacter: TotemNesiaCharDB
 
 Core.lua
 Recall.lua

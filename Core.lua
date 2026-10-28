@@ -72,13 +72,13 @@ TNC.TREMOR = "Tremor Totem"
 -- The totem a slot mode puts in place of the slot's totem, or nil when no mode is on:
 -- Anti-Poison / Anti-Disease on the water slot, Tremor on the earth slot
 function TNC.GetModeTotem(element)
-    if not TotemNesiaDB then
+    if not TotemNesiaCharDB then
         return nil
     end
     local modeTotem = nil
-    if element == "water" and TotemNesiaDB.cleansingMode then
-        modeTotem = TNC.CLEANSING[TotemNesiaDB.cleansingMode]
-    elseif element == "earth" and TotemNesiaDB.tremorMode then
+    if element == "water" and TotemNesiaCharDB.cleansingMode then
+        modeTotem = TNC.CLEANSING[TotemNesiaCharDB.cleansingMode]
+    elseif element == "earth" and TotemNesiaCharDB.tremorMode then
         modeTotem = TNC.TREMOR
     end
     if modeTotem and TotemNesia.IsTotemLearned(modeTotem) then
@@ -259,33 +259,48 @@ function TotemNesia.RefreshTotemSetIcons()
 end
 
 -- Initialize saved variables
+-- Deep copy of a table (nil in, nil out)
+local function CopyTable(t)
+    if type(t) ~= "table" then
+        return t
+    end
+    local copy = {}
+    for k, v in pairs(t) do
+        copy[k] = CopyTable(v)
+    end
+    return copy
+end
+
 function TotemNesia.InitDB()
-    if not TotemNesiaDB then
-        TotemNesiaDB = {}
+    -- Everything is saved per character in TotemNesiaCharDB. Up to 2.0 it was saved for
+    -- the whole account in TotemNesiaDB, so a character's first login copies that over and
+    -- nobody starts from an empty bar. TotemNesiaDB is only read here and never changed.
+    if not TotemNesiaCharDB then
+        TotemNesiaCharDB = CopyTable(TotemNesiaDB) or {}
     end
     
-    if TotemNesiaDB.isLocked == nil then
-        TotemNesiaDB.isLocked = true
+    if TotemNesiaCharDB.isLocked == nil then
+        TotemNesiaCharDB.isLocked = true
     end
-    if TotemNesiaDB.debugMode == nil then
-        TotemNesiaDB.debugMode = false
+    if TotemNesiaCharDB.debugMode == nil then
+        TotemNesiaCharDB.debugMode = false
     end
-    if TotemNesiaDB.audioEnabled == nil then
-        TotemNesiaDB.audioEnabled = true
+    if TotemNesiaCharDB.audioEnabled == nil then
+        TotemNesiaCharDB.audioEnabled = true
     end
-    if TotemNesiaDB.alertVoice == nil then
-        TotemNesiaDB.alertVoice = "Jenny"
+    if TotemNesiaCharDB.alertVoice == nil then
+        TotemNesiaCharDB.alertVoice = "Jenny"
     end
-    if TotemNesiaDB.minimapPos == nil then
-        TotemNesiaDB.minimapPos = 180
+    if TotemNesiaCharDB.minimapPos == nil then
+        TotemNesiaCharDB.minimapPos = 180
     end
-    if TotemNesiaDB.minimapHidden == nil then
-        TotemNesiaDB.minimapHidden = false
+    if TotemNesiaCharDB.minimapHidden == nil then
+        TotemNesiaCharDB.minimapHidden = false
     end
-    if TotemNesiaDB.timerDuration == nil then
-        TotemNesiaDB.timerDuration = 15
+    if TotemNesiaCharDB.timerDuration == nil then
+        TotemNesiaCharDB.timerDuration = 15
     end
-    if TotemNesiaDB.hideUIElement == nil then
+    if TotemNesiaCharDB.hideUIElement == nil then
         -- Auto-hide until level 10 and has Totemic Recall
         local playerLevel = UnitLevel("player")
         local hasTotemicRecall = false
@@ -297,31 +312,31 @@ function TotemNesia.InitDB()
         
         -- Auto-hide if under level 10 or doesn't have the spell yet
         if playerLevel < 10 or not hasTotemicRecall then
-            TotemNesiaDB.hideUIElement = true
+            TotemNesiaCharDB.hideUIElement = true
         else
-            TotemNesiaDB.hideUIElement = false
+            TotemNesiaCharDB.hideUIElement = false
         end
     end
-    if TotemNesiaDB.totemTrackerLocked == nil then
-        TotemNesiaDB.totemTrackerLocked = true
+    if TotemNesiaCharDB.totemTrackerLocked == nil then
+        TotemNesiaCharDB.totemTrackerLocked = true
     end
-    if TotemNesiaDB.enabledSolo == nil then
-        TotemNesiaDB.enabledSolo = true
+    if TotemNesiaCharDB.enabledSolo == nil then
+        TotemNesiaCharDB.enabledSolo = true
     end
-    if TotemNesiaDB.enabledParty == nil then
-        TotemNesiaDB.enabledParty = true
+    if TotemNesiaCharDB.enabledParty == nil then
+        TotemNesiaCharDB.enabledParty = true
     end
-    if TotemNesiaDB.enabledRaid == nil then
-        TotemNesiaDB.enabledRaid = true
+    if TotemNesiaCharDB.enabledRaid == nil then
+        TotemNesiaCharDB.enabledRaid = true
     end
-    if TotemNesiaDB.totemTrackerLayout == nil then
-        TotemNesiaDB.totemTrackerLayout = "Horizontal"
+    if TotemNesiaCharDB.totemTrackerLayout == nil then
+        TotemNesiaCharDB.totemTrackerLayout = "Horizontal"
     end
-    if TotemNesiaDB.totemBarEnabled == nil then
-        TotemNesiaDB.totemBarEnabled = true
+    if TotemNesiaCharDB.totemBarEnabled == nil then
+        TotemNesiaCharDB.totemBarEnabled = true
     end
-    if TotemNesiaDB.totemBarSlots == nil then
-        TotemNesiaDB.totemBarSlots = {
+    if TotemNesiaCharDB.totemBarSlots == nil then
+        TotemNesiaCharDB.totemBarSlots = {
             fire = nil,
             earth = nil,
             water = nil,
@@ -329,86 +344,86 @@ function TotemNesia.InitDB()
             weapon = nil
         }
     end
-    if TotemNesiaDB.totemBarLocked == nil then
-        TotemNesiaDB.totemBarLocked = true
+    if TotemNesiaCharDB.totemBarLocked == nil then
+        TotemNesiaCharDB.totemBarLocked = true
     end
-    if TotemNesiaDB.totemBarLayout == nil then
-        TotemNesiaDB.totemBarLayout = "Horizontal"
+    if TotemNesiaCharDB.totemBarLayout == nil then
+        TotemNesiaCharDB.totemBarLayout = "Horizontal"
     end
-    if TotemNesiaDB.totemBarFlyoutDirection == nil then
-        TotemNesiaDB.totemBarFlyoutDirection = "Up"
+    if TotemNesiaCharDB.totemBarFlyoutDirection == nil then
+        TotemNesiaCharDB.totemBarFlyoutDirection = "Up"
     end
-    if TotemNesiaDB.totemBarHidden == nil then
-        TotemNesiaDB.totemBarHidden = false
+    if TotemNesiaCharDB.totemBarHidden == nil then
+        TotemNesiaCharDB.totemBarHidden = false
     end
-    if TotemNesiaDB.uiFrameScale == nil then
-        TotemNesiaDB.uiFrameScale = 1.0
+    if TotemNesiaCharDB.uiFrameScale == nil then
+        TotemNesiaCharDB.uiFrameScale = 1.0
     end
-    if TotemNesiaDB.totemTrackerScale == nil then
-        TotemNesiaDB.totemTrackerScale = 1.0
+    if TotemNesiaCharDB.totemTrackerScale == nil then
+        TotemNesiaCharDB.totemTrackerScale = 1.0
     end
-    if TotemNesiaDB.totemBarScale == nil then
-        TotemNesiaDB.totemBarScale = 1.0
+    if TotemNesiaCharDB.totemBarScale == nil then
+        TotemNesiaCharDB.totemBarScale = 1.0
     end
-    if TotemNesiaDB.hideWeaponSlot == nil then
-        TotemNesiaDB.hideWeaponSlot = false
+    if TotemNesiaCharDB.hideWeaponSlot == nil then
+        TotemNesiaCharDB.hideWeaponSlot = false
     end
-    if TotemNesiaDB.shiftToOpenFlyouts == nil then
-        TotemNesiaDB.shiftToOpenFlyouts = false  -- Default false = shift required
+    if TotemNesiaCharDB.shiftToOpenFlyouts == nil then
+        TotemNesiaCharDB.shiftToOpenFlyouts = false  -- Default false = shift required
     end
-    if TotemNesiaDB.manaThreshold == nil then
-        TotemNesiaDB.manaThreshold = 30  -- Default to 30%
+    if TotemNesiaCharDB.manaThreshold == nil then
+        TotemNesiaCharDB.manaThreshold = 30  -- Default to 30%
     end
-    if TotemNesiaDB.manaAudioMuted == nil then
-        TotemNesiaDB.manaAudioMuted = false
+    if TotemNesiaCharDB.manaAudioMuted == nil then
+        TotemNesiaCharDB.manaAudioMuted = false
     end
-    if TotemNesiaDB.potionThreshold == nil then
-        TotemNesiaDB.potionThreshold = 30
+    if TotemNesiaCharDB.potionThreshold == nil then
+        TotemNesiaCharDB.potionThreshold = 30
     end
-    if TotemNesiaDB.potionAudioMuted == nil then
-        TotemNesiaDB.potionAudioMuted = false
+    if TotemNesiaCharDB.potionAudioMuted == nil then
+        TotemNesiaCharDB.potionAudioMuted = false
     end
-    if TotemNesiaDB.publicManaMuted == nil then
-        TotemNesiaDB.publicManaMuted = false
+    if TotemNesiaCharDB.publicManaMuted == nil then
+        TotemNesiaCharDB.publicManaMuted = false
     end
     -- Public mana message: party and raid can be turned on or off separately.
     -- Players who had the old single "disable" box checked start with both off.
-    if TotemNesiaDB.publicManaParty == nil then
-        TotemNesiaDB.publicManaParty = not TotemNesiaDB.publicManaMuted
+    if TotemNesiaCharDB.publicManaParty == nil then
+        TotemNesiaCharDB.publicManaParty = not TotemNesiaCharDB.publicManaMuted
     end
-    if TotemNesiaDB.publicManaRaid == nil then
-        TotemNesiaDB.publicManaRaid = not TotemNesiaDB.publicManaMuted
+    if TotemNesiaCharDB.publicManaRaid == nil then
+        TotemNesiaCharDB.publicManaRaid = not TotemNesiaCharDB.publicManaMuted
     end
-    if TotemNesiaDB.publicManaThreshold == nil then
-        TotemNesiaDB.publicManaThreshold = 15  -- the old fixed value
+    if TotemNesiaCharDB.publicManaThreshold == nil then
+        TotemNesiaCharDB.publicManaThreshold = 15  -- the old fixed value
     end
     -- Aggro alert (on-screen text and voice) and group announcements for aggro and line of sight
-    if TotemNesiaDB.aggroAlert == nil then
-        TotemNesiaDB.aggroAlert = true
+    if TotemNesiaCharDB.aggroAlert == nil then
+        TotemNesiaCharDB.aggroAlert = true
     end
-    if TotemNesiaDB.aggroAudioMuted == nil then
-        TotemNesiaDB.aggroAudioMuted = false
+    if TotemNesiaCharDB.aggroAudioMuted == nil then
+        TotemNesiaCharDB.aggroAudioMuted = false
     end
-    if TotemNesiaDB.aggroAnnounce == nil then
-        TotemNesiaDB.aggroAnnounce = true
+    if TotemNesiaCharDB.aggroAnnounce == nil then
+        TotemNesiaCharDB.aggroAnnounce = true
     end
-    if TotemNesiaDB.losAnnounce == nil then
-        TotemNesiaDB.losAnnounce = true
+    if TotemNesiaCharDB.losAnnounce == nil then
+        TotemNesiaCharDB.losAnnounce = true
     end
-    if TotemNesiaDB.manaAnnounce == nil then
-        TotemNesiaDB.manaAnnounce = true
+    if TotemNesiaCharDB.manaAnnounce == nil then
+        TotemNesiaCharDB.manaAnnounce = true
     end
-    TotemNesiaDB.onePressWithoutNampower = nil  -- removed experimental setting
-    if TotemNesiaDB.pfuiSkin == nil then
-        TotemNesiaDB.pfuiSkin = true  -- match pfUI's look when pfUI is installed
+    TotemNesiaCharDB.onePressWithoutNampower = nil  -- removed experimental setting
+    if TotemNesiaCharDB.pfuiSkin == nil then
+        TotemNesiaCharDB.pfuiSkin = true  -- match pfUI's look when pfUI is installed
     end
-    if TotemNesiaDB.pfuiSkinBars == nil then
-        TotemNesiaDB.pfuiSkinBars = true  -- also restyle the bars and recall notification
+    if TotemNesiaCharDB.pfuiSkinBars == nil then
+        TotemNesiaCharDB.pfuiSkinBars = true  -- also restyle the bars and recall notification
     end
     
     -- Initialize totem sets (5 sets)
-    if TotemNesiaDB.totemSets == nil then
-        TotemNesiaDB.totemSets = {
+    if TotemNesiaCharDB.totemSets == nil then
+        TotemNesiaCharDB.totemSets = {
             [1] = {fire = nil, earth = nil, water = nil, air = nil},
             [2] = {fire = nil, earth = nil, water = nil, air = nil},
             [3] = {fire = nil, earth = nil, water = nil, air = nil},
@@ -416,27 +431,27 @@ function TotemNesia.InitDB()
             [5] = {fire = nil, earth = nil, water = nil, air = nil}
         }
     end
-    if TotemNesiaDB.currentTotemSet == nil then
-        TotemNesiaDB.currentTotemSet = 1
+    if TotemNesiaCharDB.currentTotemSet == nil then
+        TotemNesiaCharDB.currentTotemSet = 1
     end
-    if TotemNesiaDB.totemRange == nil then
-        TotemNesiaDB.totemRange = TOTEM_DISTANCE_THRESHOLD  -- 30 yards, same as before this setting existed
+    if TotemNesiaCharDB.totemRange == nil then
+        TotemNesiaCharDB.totemRange = TOTEM_DISTANCE_THRESHOLD  -- 30 yards, same as before this setting existed
     end
-    if TotemNesiaDB.totemBarFallbacks == nil then
-        TotemNesiaDB.totemBarFallbacks = {}
+    if TotemNesiaCharDB.totemBarFallbacks == nil then
+        TotemNesiaCharDB.totemBarFallbacks = {}
     end
-    if TotemNesiaDB.hideShieldSlot == nil then
-        TotemNesiaDB.hideShieldSlot = false
+    if TotemNesiaCharDB.hideShieldSlot == nil then
+        TotemNesiaCharDB.hideShieldSlot = false
     end
-    if TotemNesiaDB.shieldFlash == nil then
-        TotemNesiaDB.shieldFlash = true
+    if TotemNesiaCharDB.shieldFlash == nil then
+        TotemNesiaCharDB.shieldFlash = true
     end
     -- cleansingMode (nil / "poison" / "disease"), tremorMode, and shieldSpell default to nil
 end
 
 -- Debug print function
 function TotemNesia.DebugPrint(msg)
-    if TotemNesiaDB and TotemNesiaDB.debugMode then
+    if TotemNesiaCharDB and TotemNesiaCharDB.debugMode then
         DEFAULT_CHAT_FRAME:AddMessage("TotemNesia DEBUG: " .. msg)
     end
 end
@@ -449,9 +464,9 @@ TNC.VOICES = {"Jenny", "Aria", "Roger", "Libby"}
 
 -- Play a voice alert. Files live in Sounds as "<alert> - <voice>.mp3",
 -- e.g. "Totems - Jenny.mp3". Alerts: "Totems", "Low Mana", "Mana Potion", "Aggro".
--- The voice comes from TotemNesiaDB.alertVoice (default "Jenny").
+-- The voice comes from TotemNesiaCharDB.alertVoice (default "Jenny").
 function TotemNesia.PlayAlertSound(alert)
-    local voice = (TotemNesiaDB and TotemNesiaDB.alertVoice) or "Jenny"
+    local voice = (TotemNesiaCharDB and TotemNesiaCharDB.alertVoice) or "Jenny"
     PlaySoundFile("Interface\\AddOns\\TotemNesia\\Sounds\\" .. alert .. " - " .. voice .. ".mp3")
 end
 
@@ -460,13 +475,13 @@ end
 -- Shared by the low mana, aggro, and line of sight announcements.
 function TotemNesia.GetAnnounceChannel()
     if GetNumRaidMembers() > 0 then
-        if TotemNesiaDB.publicManaRaid then
+        if TotemNesiaCharDB.publicManaRaid then
             return "RAID"
         end
         return nil
     end
     if GetNumPartyMembers() > 0 then
-        if TotemNesiaDB.publicManaParty then
+        if TotemNesiaCharDB.publicManaParty then
             return "PARTY"
         end
     end
@@ -475,7 +490,7 @@ end
 
 -- Function to check if addon should be active based on group settings
 function TotemNesia.IsAddonEnabled()
-    if not TotemNesiaDB then
+    if not TotemNesiaCharDB then
         return true  -- Default to enabled if DB not initialized yet
     end
     
@@ -483,11 +498,11 @@ function TotemNesia.IsAddonEnabled()
     local inParty = GetNumPartyMembers() > 0
     
     if inRaid then
-        return TotemNesiaDB.enabledRaid
+        return TotemNesiaCharDB.enabledRaid
     elseif inParty then
-        return TotemNesiaDB.enabledParty
+        return TotemNesiaCharDB.enabledParty
     else
-        return TotemNesiaDB.enabledSolo
+        return TotemNesiaCharDB.enabledSolo
     end
 end
 
@@ -683,7 +698,7 @@ end
 
 -- Range used for the recall reminder and the general out-of-range check
 function TotemNesia.GetGeneralRange()
-    return (TotemNesiaDB and TotemNesiaDB.totemRange) or TOTEM_DISTANCE_THRESHOLD
+    return (TotemNesiaCharDB and TotemNesiaCharDB.totemRange) or TOTEM_DISTANCE_THRESHOLD
 end
 
 -- How far a specific totem's effect reaches
@@ -867,7 +882,7 @@ end
 -- True when the bars should take pfUI's look: pfUI is loaded and both Appearance
 -- options are on
 function TNC.BarsUsePfUI()
-    return TotemNesiaDB and TotemNesiaDB.pfuiSkin and TotemNesiaDB.pfuiSkinBars
+    return TotemNesiaCharDB and TotemNesiaCharDB.pfuiSkin and TotemNesiaCharDB.pfuiSkinBars
         and pfUI and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config and true or false
 end
 
@@ -933,7 +948,7 @@ end
 function TotemNesia.ResolveTotemForElement(element, totemName)
     totemName = TNC.GetModeTotem(element) or totemName
     if totemName and totemName ~= "" and TotemNesia.IsSpellOnCooldown(totemName) then
-        local fallbacks = TotemNesiaDB and TotemNesiaDB.totemBarFallbacks
+        local fallbacks = TotemNesiaCharDB and TotemNesiaCharDB.totemBarFallbacks
         local fallback = fallbacks and fallbacks[element]
         if fallback and fallback ~= totemName and TotemNesia.IsTotemLearned(fallback) and not TotemNesia.IsSpellOnCooldown(fallback) then
             return fallback, true
@@ -1132,8 +1147,8 @@ end
 
 -- Shield the shield slot should cast: the one picked from the flyout, otherwise the first learned
 function TotemNesia.GetChosenShield()
-    if TotemNesiaDB and TotemNesiaDB.shieldSpell and TotemNesia.IsTotemLearned(TotemNesiaDB.shieldSpell) then
-        return TotemNesiaDB.shieldSpell
+    if TotemNesiaCharDB and TotemNesiaCharDB.shieldSpell and TotemNesia.IsTotemLearned(TotemNesiaCharDB.shieldSpell) then
+        return TotemNesiaCharDB.shieldSpell
     end
     for _, shieldName in ipairs(TNC.SHIELD_SPELLS) do
         if TotemNesia.IsTotemLearned(shieldName) then

@@ -104,7 +104,7 @@ function TotemNesia.CheckAggro()
     end
 
     local inGroup = GetNumRaidMembers() > 0 or GetNumPartyMembers() > 0
-    if not TotemNesiaDB or not TotemNesiaDB.aggroAlert or not inGroup
+    if not TotemNesiaCharDB or not TotemNesiaCharDB.aggroAlert or not inGroup
         or not UnitAffectingCombat("player") or UnitIsDeadOrGhost("player") then
         aggroSince = nil
         aggroAlerted = false
@@ -128,12 +128,12 @@ function TotemNesia.CheckAggro()
     aggroAlerted = true
     lastAggroAlert = now
     UIErrorsFrame:AddMessage("You have aggro!", 1, 0.1, 0.1, 1.0, 3)
-    if not TotemNesiaDB.aggroAudioMuted then
+    if not TotemNesiaCharDB.aggroAudioMuted then
         TotemNesia.PlayAlertSound("Aggro")
     end
     -- Chat has its own, longer cooldown: when a mob keeps bouncing between you and the
     -- tank, you still get the on-screen warning but the group isn't spammed.
-    if TotemNesiaDB.aggroAnnounce and (now - lastAggroAnnounce) >= AGGRO_ANNOUNCE_COOLDOWN then
+    if TotemNesiaCharDB.aggroAnnounce and (now - lastAggroAnnounce) >= AGGRO_ANNOUNCE_COOLDOWN then
         local channel = TotemNesia.GetAnnounceChannel()
         if channel then
             SendChatMessage("I have aggro!", channel)
@@ -202,7 +202,7 @@ losFrame:SetScript("OnEvent", function()
         lastLosAny = 0
         return
     end
-    if not arg1 or not TotemNesiaDB or not TotemNesiaDB.losAnnounce then
+    if not arg1 or not TotemNesiaCharDB or not TotemNesiaCharDB.losAnnounce then
         return
     end
     if arg1 ~= LOS_ERROR and not string.find(string.lower(arg1), "line of sight") then

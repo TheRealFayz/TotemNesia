@@ -107,7 +107,7 @@ combatFrame:SetScript("OnEvent", function()
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- When UI is hidden, monitor for manual Totemic Recall after combat
-        if TotemNesiaDB.hideUIElement and TotemNesia.hasTotems then
+        if TotemNesiaCharDB.hideUIElement and TotemNesia.hasTotems then
             -- Start monitoring for Totemic Recall
             TotemNesia.monitoringForRecall = true
             TotemNesia.monitorTimer = 60  -- Monitor for 60 seconds after combat
@@ -158,25 +158,25 @@ eventFrame:SetScript("OnEvent", function()
         TotemNesia.RefreshTotemSetIcons()
         
         -- Apply scales
-        iconFrame:SetScale(TotemNesiaDB.uiFrameScale)
-        totemTracker:SetScale(TotemNesiaDB.totemTrackerScale)
-        totemBar:SetScale(TotemNesiaDB.totemBarScale)
+        iconFrame:SetScale(TotemNesiaCharDB.uiFrameScale)
+        totemTracker:SetScale(TotemNesiaCharDB.totemTrackerScale)
+        totemBar:SetScale(TotemNesiaCharDB.totemBarScale)
         
         -- Set Totem Tracker mouse state based on lock setting
-        if TotemNesiaDB.totemTrackerLocked then
+        if TotemNesiaCharDB.totemTrackerLocked then
             totemTracker:EnableMouse(false)
         else
             totemTracker:EnableMouse(true)
         end
         
         -- Set Totem Bar mouse state based on lock setting
-        if TotemNesiaDB.totemBarLocked then
+        if TotemNesiaCharDB.totemBarLocked then
             totemBar:EnableMouse(false)
         else
             totemBar:EnableMouse(true)
         end
         
-        if TotemNesiaDB.minimapHidden then
+        if TotemNesiaCharDB.minimapHidden then
             minimapButton:Hide()
         else
             minimapButton:Show()
@@ -203,8 +203,8 @@ eventFrame:SetScript("OnEvent", function()
         
         if IsShaman() and TotemNesia.hasTotems then
             -- Only show UI element if not hidden by setting AND player can use Totemic Recall
-            if not TotemNesiaDB.hideUIElement and TotemNesia.CanUseTotemicRecall() then
-                TotemNesia.displayTimer = TotemNesiaDB.timerDuration
+            if not TotemNesiaCharDB.hideUIElement and TotemNesia.CanUseTotemicRecall() then
+                TotemNesia.displayTimer = TotemNesiaCharDB.timerDuration
                 TotemNesia.UpdateElementalIndicators()
                 iconFrame:Show()
                 iconFrame:SetAlpha(1)
@@ -219,7 +219,7 @@ eventFrame:SetScript("OnEvent", function()
             end
             
             -- Play audio only if player can use Totemic Recall
-            if TotemNesiaDB.audioEnabled and TotemNesia.CanUseTotemicRecall() then
+            if TotemNesiaCharDB.audioEnabled and TotemNesia.CanUseTotemicRecall() then
                 TotemNesia.PlayAlertSound("Totems")
             end
         else
@@ -322,8 +322,8 @@ timerFrame:SetScript("OnUpdate", function()
             if not iconFrame:IsVisible() and TotemNesia.CanUseTotemicRecall() then
                 TotemNesia.UpdateElementalIndicators()
                 iconFrame:Show()
-                TotemNesia.displayTimer = TotemNesiaDB.timerDuration
-                if TotemNesiaDB.audioEnabled then
+                TotemNesia.displayTimer = TotemNesiaCharDB.timerDuration
+                if TotemNesiaCharDB.audioEnabled then
                     TotemNesia.PlayAlertSound("Totems")
                 end
                 TotemNesia.DebugPrint("Too far from totems - UI shown")

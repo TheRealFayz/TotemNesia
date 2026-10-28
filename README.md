@@ -70,6 +70,8 @@ A small bar that shows every active totem with its timer. It can be moved, locke
 
 Click the minimap button or type `/tn` to open the settings window (right-click and drag to move the button). `/tn bind` starts Key Bind Mode.
 
+Everything is saved per character, so each Shaman keeps their own totem sets, bar setup, and settings. The first time a character logs in after updating from 2.0, it starts with a copy of your old settings.
+
 - **General** - Recall notification, totem tracker, totem range, which group types the addon runs in, debug mode, and appearance
 - **Totem Bar** - Slots, layout, flyout direction, scale, key bindings, and a how-to-use guide
 - **Totem Sets** - Build your 5 sets
