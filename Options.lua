@@ -14,32 +14,84 @@ local iconFrame = S.iconFrame
 local totemBar = S.totemBar
 local totemTracker = S.totemTracker
 
--- Minimap button
+local LOGO = "Interface\\AddOns\\TotemNesia\\Textures\\Logo"
+
+-- ============================================================================
+-- SPINNING LOGO
+-- ============================================================================
+-- The logo on the settings window and the minimap button does one quick spin every
+-- SPIN_EVERY seconds. WoW 1.12 has no texture rotation, so the spin turns the texture
+-- coordinates instead. Logo.tga keeps the art inside the middle of the image, so the
+-- turned coordinates never reach past its edges and the corners stay clear.
+local SPIN_EVERY = 3     -- seconds from the start of one spin to the start of the next
+local SPIN_TIME = 0.6    -- how long a spin takes
+local SPIN_K = 0.35355   -- half the diagonal of the visible square, in texture units
+local spinTextures = {}
+local spinClock = 0
+local spinResting = false
+
+local function SetLogoAngle(tex, a)
+    local c, s = math.cos(a), math.sin(a)
+    local k = SPIN_K
+    tex:SetTexCoord(
+        0.5 + k * (s - c), 0.5 - k * (s + c),   -- upper left
+        0.5 - k * (c + s), 0.5 + k * (c - s),   -- lower left
+        0.5 + k * (c + s), 0.5 + k * (s - c),   -- upper right
+        0.5 + k * (c - s), 0.5 + k * (s + c))   -- lower right
+end
+
+local spinFrame = CreateFrame("Frame")
+spinFrame:SetScript("OnUpdate", function()
+    spinClock = math.mod(spinClock + (arg1 or 0), SPIN_EVERY)
+    local t = spinClock / SPIN_TIME
+    if t < 1 then
+        -- Ease in and out, one full turn clockwise
+        local eased = t * t * (3 - 2 * t)
+        local angle = -2 * math.pi * eased
+        for i = 1, table.getn(spinTextures) do
+            SetLogoAngle(spinTextures[i], angle)
+        end
+        spinResting = false
+    elseif not spinResting then
+        for i = 1, table.getn(spinTextures) do
+            SetLogoAngle(spinTextures[i], 0)
+        end
+        spinResting = true
+    end
+end)
+
+-- ============================================================================
+-- MINIMAP BUTTON
+-- ============================================================================
 local minimapButton = CreateFrame("Button", "TotemNesiaMinimapButton", Minimap)
-minimapButton:SetWidth(31)
-minimapButton:SetHeight(31)
+minimapButton:SetWidth(31)   -- the usual minimap button size, so button bars that
+minimapButton:SetHeight(31)  -- scale every button the same (pfUI) treat it like the rest
 minimapButton:SetFrameStrata("MEDIUM")
 minimapButton:SetFrameLevel(8)
 minimapButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
--- Button icon
-local minimapIcon = minimapButton:CreateTexture(nil, "BACKGROUND")
-minimapIcon:SetWidth(20)
-minimapIcon:SetHeight(20)
-minimapIcon:SetPoint("CENTER", 0, 1)
-minimapIcon:SetTexture("Interface\\Icons\\Spell_Nature_Reincarnation")
+-- The logo has its own ring, so it doesn't need the usual minimap button border. It's
+-- drawn a little smaller than the button so its ring is the same size as the gold ring
+-- on other addons' buttons.
+local minimapIcon = minimapButton:CreateTexture(nil, "ARTWORK")
+minimapIcon:SetWidth(28)
+minimapIcon:SetHeight(28)
+minimapIcon:SetPoint("CENTER", minimapButton, "CENTER", 0, 0)
+minimapIcon:SetTexture(LOGO)
+SetLogoAngle(minimapIcon, 0)
+table.insert(spinTextures, minimapIcon)
 
--- Button border
-local minimapBorder = minimapButton:CreateTexture(nil, "OVERLAY")
-minimapBorder:SetWidth(52)
-minimapBorder:SetHeight(52)
-minimapBorder:SetPoint("TOPLEFT", 0, 0)
-minimapBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+-- ============================================================================
+-- SETTINGS WINDOW
+-- ============================================================================
+-- Blizzard dialog frame with the round logo over the top-left corner, the title in the
+-- middle, a dark inset holding the settings, and icon tabs down the right side.
+local W, H = 400, 500
+local CW = 322        -- usable width inside a page
 
--- Create options menu frame
 local optionsMenu = CreateFrame("Frame", "TotemNesiaOptionsMenu", UIParent)
-optionsMenu:SetWidth(400)
-optionsMenu:SetHeight(400)  -- 20% shorter (was 500)
+optionsMenu:SetWidth(W)
+optionsMenu:SetHeight(H)
 optionsMenu:SetPoint("CENTER", UIParent, "CENTER")
 optionsMenu:SetBackdrop({
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -53,129 +105,166 @@ optionsMenu:SetBackdropColor(0, 0, 0, 0.9)
 optionsMenu:SetFrameStrata("DIALOG")
 optionsMenu:EnableMouse(true)
 optionsMenu:SetMovable(true)
+optionsMenu:SetClampedToScreen(true)
 optionsMenu:RegisterForDrag("LeftButton")
 optionsMenu:SetScript("OnDragStart", function() this:StartMoving() end)
 optionsMenu:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
 optionsMenu:Hide()
 
--- Make options menu close with ESC key
+-- Close with Esc
 table.insert(UISpecialFrames, "TotemNesiaOptionsMenu")
 
--- Options menu title
-local menuTitle = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-menuTitle:SetPoint("TOP", 0, -15)
-menuTitle:SetText("TotemNesia V" .. TotemNesia.GetVersion())  -- Read from the TOC file
-menuTitle:SetTextColor(1, 0.82, 0, 1)  -- Yellow color
+-- Round logo over the top-left corner
+local portraitFrame = CreateFrame("Frame", nil, optionsMenu)
+portraitFrame:SetWidth(72)
+portraitFrame:SetHeight(72)
+portraitFrame:SetPoint("TOPLEFT", optionsMenu, "TOPLEFT", -12, 12)
+portraitFrame:SetFrameLevel(optionsMenu:GetFrameLevel() + 5)
+local portrait = portraitFrame:CreateTexture(nil, "ARTWORK")
+portrait:SetAllPoints(portraitFrame)
+portrait:SetTexture(LOGO)
+SetLogoAngle(portrait, 0)
+table.insert(spinTextures, portrait)
 
--- Author credit (smaller text below title)
-local authorText = optionsMenu:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+-- Title, a little right of center to balance the logo
+local menuTitle = optionsMenu:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+menuTitle:SetPoint("TOP", optionsMenu, "TOP", 16, -18)
+menuTitle:SetText("TotemNesia")
+local authorText = optionsMenu:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 authorText:SetPoint("TOP", menuTitle, "BOTTOM", 0, -2)
 authorText:SetText("By Fayz")
-authorText:SetTextColor(1, 1, 1, 1)  -- White color
+local versionText = optionsMenu:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+versionText:SetPoint("TOP", authorText, "BOTTOM", 0, -6)
+versionText:SetText("|cff888888Version " .. TotemNesia.GetVersion() .. "|r")
 
--- Close button (X in upper right)
-local closeButton = CreateFrame("Button", nil, optionsMenu)
-closeButton:SetWidth(32)
-closeButton:SetHeight(32)
-closeButton:SetPoint("TOPRIGHT", -10, -5)  -- Aligned with scrollbar right edge
+local closeButton = CreateFrame("Button", "TotemNesiaOptionsClose", optionsMenu, "UIPanelCloseButton")
+closeButton:SetPoint("TOPRIGHT", optionsMenu, "TOPRIGHT", -6, -6)
 
--- Use the standard UI close button textures
-closeButton:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
-closeButton:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
-closeButton:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
+-- ----------------------------------------------------------------------------
+-- Scale grip in the bottom-right corner: drag to scale the whole window, right-click
+-- to put it back to 100%. The top-left corner stays put while you drag. The scale is
+-- saved per character.
+-- ----------------------------------------------------------------------------
+local TEXTURES = "Interface\\AddOns\\TotemNesia\\Textures\\"
+local MIN_SCALE, MAX_SCALE = 0.6, 1.6
 
-closeButton:SetScript("OnClick", function()
-    optionsMenu:Hide()
+local function SetWindowScale(s, absLeft, absTop)
+    if s < MIN_SCALE then s = MIN_SCALE end
+    if s > MAX_SCALE then s = MAX_SCALE end
+    s = math.floor(s * 100 + 0.5) / 100
+    if not absLeft then
+        local eff = optionsMenu:GetEffectiveScale()
+        absLeft = optionsMenu:GetLeft() * eff
+        absTop = optionsMenu:GetTop() * eff
+    end
+    optionsMenu:SetScale(s)
+    -- keep the top-left corner where it was on screen
+    local eff = optionsMenu:GetEffectiveScale()
+    optionsMenu:ClearAllPoints()
+    optionsMenu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", absLeft / eff, absTop / eff)
+    TotemNesiaCharDB.optionsScale = s
+end
+
+local scaleGrip = CreateFrame("Button", nil, optionsMenu)
+scaleGrip:SetWidth(16)
+scaleGrip:SetHeight(16)
+scaleGrip:SetPoint("BOTTOMRIGHT", optionsMenu, "BOTTOMRIGHT", -10, 10)
+scaleGrip:SetFrameLevel(optionsMenu:GetFrameLevel() + 10)
+scaleGrip:EnableMouse(true)
+scaleGrip:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+scaleGrip:SetNormalTexture(TEXTURES .. "SizeGrabber-Up")
+scaleGrip:SetPushedTexture(TEXTURES .. "SizeGrabber-Down")
+scaleGrip:SetHighlightTexture(TEXTURES .. "SizeGrabber-Highlight")
+scaleGrip:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Drag to resize")
+    GameTooltip:AddLine("Right-click to reset", 1, 1, 1)
+    GameTooltip:Show()
+end)
+scaleGrip:SetScript("OnLeave", function()
+    if not this.sizing then
+        GameTooltip:Hide()
+    end
+end)
+scaleGrip:SetScript("OnMouseDown", function()
+    if arg1 == "LeftButton" then
+        local eff = optionsMenu:GetEffectiveScale()
+        this.left = optionsMenu:GetLeft() * eff
+        this.top = optionsMenu:GetTop() * eff
+        this.sizing = true
+        this:SetButtonState("PUSHED", 1)  -- stay pressed for the whole drag
+    elseif arg1 == "RightButton" then
+        SetWindowScale(1)
+    end
+end)
+scaleGrip:SetScript("OnMouseUp", function()
+    if this.sizing then
+        this.sizing = false
+        this:SetButtonState("NORMAL")
+        GameTooltip:Hide()
+    end
+end)
+scaleGrip:SetScript("OnUpdate", function()
+    if not this.sizing then
+        return
+    end
+    local cx, cy = GetCursorPosition()
+    -- scale the window so its bottom-right corner follows the cursor
+    local wantEff = ((cx - this.left) / W + (this.top - cy) / H) / 2
+    SetWindowScale(wantEff / UIParent:GetEffectiveScale(), this.left, this.top)
+    GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Scale: " .. math.floor(TotemNesiaCharDB.optionsScale * 100 + 0.5) .. "%")
+    GameTooltip:Show()
 end)
 
--- Content frames
-local settingsContent = CreateFrame("ScrollFrame", nil, optionsMenu)
-settingsContent:SetPoint("TOPLEFT", 10, -52)  -- Starts below the title and "By Fayz" line
-settingsContent:SetPoint("BOTTOMRIGHT", -30, 40)  -- Leave room for scrollbar on right
+-- Dark inset that holds the settings
+local BOX_BACKDROP = {
+    bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 }
+}
+local inset = CreateFrame("Frame", nil, optionsMenu)
+inset:SetPoint("TOPLEFT", optionsMenu, "TOPLEFT", 14, -72)
+inset:SetPoint("BOTTOMRIGHT", optionsMenu, "BOTTOMRIGHT", -14, 28)  -- the strip below holds the scale grip
+inset:SetBackdrop(BOX_BACKDROP)
+inset:SetBackdropColor(0, 0, 0, 0.5)
+inset:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
--- Create scroll child (this is where all settings will go)
+-- One scroll area; each tab is a page inside it
+local settingsContent = CreateFrame("ScrollFrame", "TotemNesiaOptionsScroll", inset, "UIPanelScrollFrameTemplate")
+settingsContent:SetPoint("TOPLEFT", inset, "TOPLEFT", 6, -8)
+settingsContent:SetPoint("BOTTOMRIGHT", inset, "BOTTOMRIGHT", -28, 8)
+settingsContent.scrollBarHideable = 1
 local settingsScrollChild = CreateFrame("Frame", nil, settingsContent)
-settingsScrollChild:SetWidth(360)  -- Reduced to leave room for scrollbar
-settingsScrollChild:SetHeight(800)  -- Tall enough for the range, shield, and totem bar help sections
+settingsScrollChild:SetWidth(CW + 8)
+settingsScrollChild:SetHeight(100)
 settingsContent:SetScrollChild(settingsScrollChild)
-
--- Create scrollbar BEFORE setting up mouse wheel (so it exists when referenced)
-local settingsScrollbar = CreateFrame("Slider", nil, optionsMenu)
-settingsScrollbar:SetPoint("TOPRIGHT", optionsMenu, "TOPRIGHT", -10, -52)  -- Lines up with the top of the content
-settingsScrollbar:SetPoint("BOTTOMRIGHT", optionsMenu, "BOTTOMRIGHT", -10, 40)  -- Aligned with content bottom
-settingsScrollbar:SetWidth(16)
-settingsScrollbar:SetOrientation("VERTICAL")
-settingsScrollbar:SetMinMaxValues(0, 1)
-settingsScrollbar:SetValueStep(0.01)
-settingsScrollbar:SetValue(0)
-settingsScrollbar:EnableMouse(true)
-
--- Scrollbar background
-settingsScrollbar:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8X8",
-    edgeFile = "Interface\\Buttons\\WHITE8X8",
-    tile = false,
-    tileSize = 1,
-    edgeSize = 2,
-    insets = { left = 0, right = 0, top = 0, bottom = 0 }
-})
-settingsScrollbar:SetBackdropColor(0.2, 0.2, 0.2, 0.9)
-settingsScrollbar:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-
--- Scrollbar thumb
-local scrollbarThumb = settingsScrollbar:CreateTexture(nil, "OVERLAY")
-scrollbarThumb:SetTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
-scrollbarThumb:SetWidth(16)
-scrollbarThumb:SetHeight(24)
-settingsScrollbar:SetThumbTexture(scrollbarThumb)
-
--- Flag to prevent circular updates
-local updatingScrollbar = false
-
--- Enable mouse wheel scrolling (NOW scrollbar exists)
 settingsContent:EnableMouseWheel(true)
 settingsContent:SetScript("OnMouseWheel", function()
-    local current = this:GetVerticalScroll()
-    local maxScroll = this:GetVerticalScrollRange()
-    if arg1 > 0 then
-        -- Scroll up
-        this:SetVerticalScroll(math.max(0, current - 20))
+    local bar = getglobal("TotemNesiaOptionsScrollScrollBar")
+    if bar and bar:IsShown() then
+        bar:SetValue(bar:GetValue() - arg1 * 40)
+    end
+end)
+
+-- Show the scroll bar only when the page is taller than the inset
+local function UpdateScrollBar()
+    settingsContent:UpdateScrollChildRect()
+    local bar = getglobal("TotemNesiaOptionsScrollScrollBar")
+    if not bar then
+        return
+    end
+    if (settingsScrollChild:GetHeight() or 0) > (settingsContent:GetHeight() or 0) + 1 then
+        bar:Show()
     else
-        -- Scroll down
-        this:SetVerticalScroll(math.min(maxScroll, current + 20))
+        bar:SetValue(0)
+        bar:Hide()
     end
-    -- Update scrollbar position with NEW scroll value
-    if not updatingScrollbar then
-        updatingScrollbar = true
-        local newScroll = this:GetVerticalScroll()
-        if maxScroll > 0 then
-            settingsScrollbar:SetValue(newScroll / maxScroll)
-        else
-            settingsScrollbar:SetValue(0)
-        end
-        updatingScrollbar = false
-    end
-end)
-
--- Scrollbar OnValueChanged script
-settingsScrollbar:SetScript("OnValueChanged", function()
-    if not updatingScrollbar then
-        updatingScrollbar = true
-        local value = this:GetValue()
-        local maxScroll = settingsContent:GetVerticalScrollRange()
-        settingsContent:SetVerticalScroll(value * maxScroll)
-        updatingScrollbar = false
-    end
-end)
-
--- Make scrollbar visible
-settingsScrollbar:SetFrameLevel(optionsMenu:GetFrameLevel() + 2)
-settingsScrollbar:Show()
-
-settingsContent:Show()
+end
 
 -- ============================================================================
--- OPTIONS WINDOW CONTENT (tabs, Totem Sets, Mana, Settings) AND MINIMAP BUTTON
+-- OPTIONS WINDOW CONTENT
 -- ============================================================================
 -- Everything is built inside one function so its controls are local to that function
 -- instead of the file. A Lua file can only hold 200 top-level locals, and a single
@@ -186,16 +275,6 @@ function TNC.BuildOptionsUI()
     local ui = {}
     TNC.ui = ui
 
-    local ACTIVE_TAB = "Interface\\PaperDollInfoFrame\\UI-Character-ActiveTab"
-    local INACTIVE_TAB = "Interface\\PaperDollInfoFrame\\UI-Character-InActiveTab"
-    local SLIDER_BACKDROP = {
-        bgFile = "Interface\\Buttons\\UI-SliderBar-Background",
-        edgeFile = "Interface\\Buttons\\UI-SliderBar-Border",
-        tile = true,
-        tileSize = 8,
-        edgeSize = 8,
-        insets = { left = 3, right = 3, top = 6, bottom = 6 }
-    }
     local BUTTON_BACKDROP = {
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -208,11 +287,32 @@ function TNC.BuildOptionsUI()
         insets = { left = 0, right = 0, top = 0, bottom = 0 }
     }
 
+    -- Unique names for controls whose templates need one (sliders)
+    local uid = 0
+    local function NewName(prefix)
+        uid = uid + 1
+        return "TotemNesiaOpt" .. prefix .. uid
+    end
+
+    local function Tooltip(frame, title, text)
+        frame.tipTitle = title
+        frame.tipText = text
+        frame:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+            GameTooltip:SetText(this.tipTitle)
+            if this.tipText then
+                GameTooltip:AddLine(this.tipText, 1, 1, 1, 1)
+            end
+            GameTooltip:Show()
+        end)
+        frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+
     -- ------------------------------------------------------------------
     -- Small builders
     -- ------------------------------------------------------------------
     local function MakeText(parent, font, point, x, y, text, width, justify)
-        local fs = parent:CreateFontString(nil, "OVERLAY", font)
+        local fs = parent:CreateFontString(nil, "ARTWORK", font)
         fs:SetPoint(point, x, y)
         if width then
             fs:SetWidth(width)
@@ -225,21 +325,27 @@ function TNC.BuildOptionsUI()
     end
 
     -- Checkbox bound to a saved setting. invert = checkbox shows the opposite of the setting.
-    -- onChange runs after the setting is saved. labelLeft puts the label on the left side.
+    -- onChange runs after the setting is saved. The label is part of the click area.
     local checkboxes = {}
-    local function MakeCheckbox(parent, point, x, y, text, dbKey, invert, onChange, labelLeft)
-        local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-        cb:SetPoint(point, x, y)
-        cb.anchorPoint, cb.anchorX, cb.anchorY = point, x, y  -- for the pfUI style
-        cb:SetWidth(24)
-        cb:SetHeight(24)
-        local label = cb:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        if labelLeft then
-            label:SetPoint("RIGHT", cb, "LEFT", -5, 0)
-        else
-            label:SetPoint("LEFT", cb, "RIGHT", 5, 0)
+    local function MakeCheckbox(parent, x, y, text, dbKey, invert, onChange)
+        local cb = CreateFrame("CheckButton", nil, parent)
+        cb:SetWidth(22)
+        cb:SetHeight(22)
+        cb:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+        cb:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
+        cb:SetPushedTexture("Interface\\Buttons\\UI-CheckBox-Down")
+        cb:SetHighlightTexture("Interface\\Buttons\\UI-CheckBox-Highlight")
+        local hl = cb:GetHighlightTexture()
+        if hl then
+            hl:SetBlendMode("ADD")
         end
+        cb:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
+        local label = cb:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        label:SetPoint("LEFT", cb, "RIGHT", 4, 1)
         label:SetText(text)
+        if cb.SetHitRectInsets then
+            cb:SetHitRectInsets(0, -(label:GetStringWidth() or 0) - 6, 0, 0)
+        end
         cb.dbKey = dbKey
         cb.invert = invert
         cb.onChange = onChange
@@ -258,33 +364,38 @@ function TNC.BuildOptionsUI()
         return cb
     end
 
-    -- Slider bound to a saved setting. format(value) returns the label text.
-    -- round(raw) turns the raw slider value into the stored value.
+    -- Slider bound to a saved setting: "Label:  value" above the bar.
+    -- valueText(value) formats the value, round(raw) turns the raw slider value into
+    -- the stored value.
     local sliders = {}
-    local function MakeSlider(parent, y, minValue, maxValue, step, dbKey, format, round, onChange)
-        local label = MakeText(parent, "GameFontNormal", "TOP", 0, y, "")
-        local slider = CreateFrame("Slider", nil, parent)
-        slider:SetPoint("TOP", 0, y - 20)
-        slider:SetWidth(350)
-        slider:SetHeight(15)
-        slider:SetOrientation("HORIZONTAL")
+    local function MakeSlider(parent, y, label, minValue, maxValue, step, dbKey, valueText, round, onChange)
+        local name = NewName("Slider")
+        local title = MakeText(parent, "GameFontNormalSmall", "TOPLEFT", 12, y, label)
+        local slider = CreateFrame("Slider", name, parent, "OptionsSliderTemplate")
+        slider:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, y - 16)
+        slider:SetWidth(CW - 16)
+        slider:SetHeight(16)
         slider:SetMinMaxValues(minValue, maxValue)
         slider:SetValueStep(step)
-        slider:SetBackdrop(SLIDER_BACKDROP)
-        local thumb = slider:CreateTexture(nil, "OVERLAY")
-        thumb:SetTexture("Interface\\Buttons\\UI-SliderBar-Button-Horizontal")
-        thumb:SetWidth(32)
-        thumb:SetHeight(32)
-        slider:SetThumbTexture(thumb)
-        slider.label = label
+        getglobal(name .. "Low"):SetText(valueText(minValue))
+        getglobal(name .. "High"):SetText(valueText(maxValue))
+        getglobal(name .. "Text"):SetText("")
+        slider.title = title
+        slider.labelText = label
         slider.dbKey = dbKey
-        slider.format = format
+        slider.valueText = valueText
         slider.round = round
         slider.onChange = onChange
+        slider.ShowValue = function(self, value)
+            self.title:SetText(self.labelText .. ":  |cffffffff" .. self.valueText(value) .. "|r")
+        end
         slider:SetScript("OnValueChanged", function()
             local value = this.round(this:GetValue())
+            this:ShowValue(value)
+            if this.loading then
+                return
+            end
             TotemNesiaCharDB[this.dbKey] = value
-            this.label:SetText(this.format(value))
             if this.onChange then
                 this.onChange(value)
             end
@@ -296,6 +407,10 @@ function TNC.BuildOptionsUI()
     local function RoundWhole(v) return math.floor(v + 0.5) end
     local function RoundTenth(v) return math.floor(v * 10 + 0.5) / 10 end
     local function RoundFive(v) return math.floor(v / 5 + 0.5) * 5 end
+    local function Seconds(v) return v .. "s" end
+    local function Yards(v) return v .. " yds" end
+    local function Percent(v) return v .. "%" end
+    local function Plain(v) return tostring(v) end
 
     -- ------------------------------------------------------------------
     -- Pages and tabs
@@ -303,7 +418,7 @@ function TNC.BuildOptionsUI()
     -- and the scroll area is sized to that page so there is no empty space at the bottom.
     -- ------------------------------------------------------------------
     local sc = settingsScrollChild
-    local COL_L, COL_R = 15, 195
+    local COL_L, COL_R = 8, 170
     local pages = {}
     local pg      -- page being built
     local y = 0   -- running row cursor on that page
@@ -311,64 +426,66 @@ function TNC.BuildOptionsUI()
     local function NewPage()
         local page = CreateFrame("Frame", nil, sc)
         page:SetPoint("TOPLEFT", sc, "TOPLEFT", 0, 0)
-        page:SetWidth(360)
+        page:SetWidth(CW + 8)
         page:SetHeight(10)
         page:Hide()
         table.insert(pages, page)
         pg = page
-        y = -8
+        y = -6
         return page
     end
 
     -- Finish the page being built: remember how tall it is
     local function EndPage()
-        pg.contentHeight = -y + 4
+        pg.contentHeight = -y + 6
         pg:SetHeight(pg.contentHeight)
     end
 
-    -- Section header: white title with a thin gold line under it
+    -- Gold section title with a faint gold rule under it
     local function Header(text)
-        MakeText(pg, "GameFontHighlight", "TOPLEFT", 12, y, text)
-        local line = pg:CreateTexture(nil, "ARTWORK")
-        line:SetTexture(1, 0.82, 0, 0.35)
-        line:SetHeight(1)
-        line:SetPoint("TOPLEFT", pg, "TOPLEFT", 12, y - 16)
-        line:SetPoint("TOPRIGHT", pg, "TOPRIGHT", -8, y - 16)
+        if y < -6 then
+            y = y - 8   -- a little air above every section but the first
+        end
+        MakeText(pg, "GameFontNormal", "TOPLEFT", 8, y, text)
+        local rule = pg:CreateTexture(nil, "ARTWORK")
+        rule:SetTexture(1, 0.82, 0, 0.25)
+        rule:SetHeight(1)
+        rule:SetWidth(CW)
+        rule:SetPoint("TOPLEFT", pg, "TOPLEFT", 8, y - 16)
+        y = y - 26
+    end
+
+    -- Checkbox at the current row (call Row() after the last one on the row)
+    local function Check(x, text, dbKey, invert, onChange)
+        return MakeCheckbox(pg, x, y, text, dbKey, invert, onChange)
+    end
+    local function Row()
         y = y - 24
     end
 
-    -- Checkbox at the current row
-    local function Check(x, text, dbKey, invert, onChange)
-        return MakeCheckbox(pg, "TOPLEFT", x, y, text, dbKey, invert, onChange)
-    end
-
     -- Slider at the current row, then move the cursor past it
-    local function Slider(minValue, maxValue, step, dbKey, format, round, onChange)
-        MakeSlider(pg, y, minValue, maxValue, step, dbKey, format, round, onChange)
-        y = y - 46
+    local function Slider(label, minValue, maxValue, step, dbKey, valueText, round, onChange)
+        MakeSlider(pg, y, label, minValue, maxValue, step, dbKey, valueText, round, onChange)
+        y = y - 50
     end
 
-    -- Small help text at the current row, then move the cursor past it
-    local function Note(text, height)
-        MakeText(pg, "GameFontNormalSmall", "TOPLEFT", COL_L, y, text, 335, "LEFT")
-        y = y - height
+    -- Small gray help text at the current row, then move the cursor past it
+    local function Note(text)
+        local fs = MakeText(pg, "GameFontDisableSmall", "TOPLEFT", 12, y, text, CW - 8, "LEFT")
+        local h = fs:GetHeight() or 0
+        local guess = math.ceil(string.len(text) / 58) * 12
+        if guess > h then
+            h = guess
+        end
+        y = y - h - 8
+        return fs
     end
 
+    -- Side tabs: spellbook-style icon tabs down the right edge of the window
     local tabs = {}
     local function SelectTab(index)
         for i, tab in ipairs(tabs) do
-            if ui.pfSkinned then
-                -- pfUI style: gold border on the active tab, normal border on the rest
-                if i == index then
-                    tab:SetBackdropBorderColor(1, 0.82, 0, 1)
-                else
-                    tab:SetBackdropBorderColor(pfUI.api.GetStringColor(pfUI_config.appearance.border.color))
-                end
-            elseif i == index then
-                tab:SetNormalTexture(ACTIVE_TAB)
-            else
-                tab:SetNormalTexture(INACTIVE_TAB)
-            end
+            tab:SetChecked(i == index and 1 or nil)
         end
         for i, page in ipairs(pages) do
             if i == index then
@@ -377,32 +494,44 @@ function TNC.BuildOptionsUI()
                 page:Hide()
             end
         end
+        ui.currentTab = index
         sc:SetHeight(pages[index].contentHeight or 10)
-        settingsContent:UpdateScrollChildRect()
         settingsContent:SetVerticalScroll(0)
-        settingsScrollbar:SetValue(0)
+        UpdateScrollBar()
         if index == 3 then
             ui.RefreshSetsTab()
         end
     end
 
-    local tabNames = {"General", "Totem Bar", "Totem Sets", "Alerts"}
-    for i, name in ipairs(tabNames) do
-        local tab = CreateFrame("Button", nil, optionsMenu)
-        tab:SetWidth(100)
+    local tabInfo = {
+        {name = "General", icon = "Interface\\Icons\\INV_Misc_Gear_01"},
+        {name = "Totem Bar", icon = "Interface\\Icons\\Spell_Fire_SearingTotem"},
+        {name = "Totem Sets", icon = "Interface\\Icons\\Spell_Nature_StoneSkinTotem"},
+        {name = "Alerts", icon = "Interface\\Icons\\Ability_Warrior_BattleShout"}
+    }
+    for i, info in ipairs(tabInfo) do
+        local tab = CreateFrame("CheckButton", nil, optionsMenu)
+        tab:SetWidth(32)
         tab:SetHeight(32)
-        if i == 1 then
-            tab:SetPoint("TOPLEFT", optionsMenu, "BOTTOMLEFT", 10, 7)
-            tab:SetNormalTexture(ACTIVE_TAB)
-        else
-            tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", -15, 0)
-            tab:SetNormalTexture(INACTIVE_TAB)
+        tab:SetPoint("TOPLEFT", optionsMenu, "TOPLEFT", W - 4, -48 - (i - 1) * 48)
+        local bg = tab:CreateTexture(nil, "BACKGROUND")
+        bg:SetTexture("Interface\\SpellBook\\SpellBook-SkillLineTab")
+        bg:SetWidth(64)
+        bg:SetHeight(64)
+        bg:SetPoint("TOPLEFT", tab, "TOPLEFT", -3, 11)
+        tab:SetNormalTexture(info.icon)
+        tab:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square")
+        local hl = tab:GetHighlightTexture()
+        if hl then
+            hl:SetBlendMode("ADD")
         end
-        tab:SetHighlightTexture(ACTIVE_TAB)
-        local tabText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        tabText:SetPoint("CENTER", 0, 2)
-        tabText:SetText(name)
+        tab:SetCheckedTexture("Interface\\Buttons\\CheckButtonHilight")
+        local ck = tab.GetCheckedTexture and tab:GetCheckedTexture()
+        if ck then
+            ck:SetBlendMode("ADD")
+        end
         tab.index = i
+        Tooltip(tab, info.name)
         tab:SetScript("OnClick", function()
             SelectTab(this.index)
         end)
@@ -415,7 +544,7 @@ function TNC.BuildOptionsUI()
     NewPage()
 
     Header("Recall Notification")
-    Check(COL_L, "Lock recall notification", "isLocked", false, function(locked)
+    Check(COL_L, "Lock notification", "isLocked", false, function(locked)
         if locked then
             iconFrame:SetBackdropColor(0, 0, 0, 0.75)
             iconFrame:RegisterForClicks("LeftButtonUp")
@@ -429,14 +558,12 @@ function TNC.BuildOptionsUI()
             iconFrame:Show()
         end
     end)
-    Check(COL_R, "Hide recall notification", "hideUIElement")
-    y = y - 30
-    Slider(15, 60, 1, "timerDuration",
-        function(v) return "Display Duration: " .. v .. "s" end, RoundWhole)
-    Slider(0.5, 2.0, 0.1, "uiFrameScale",
-        function(v) return "Scale: " .. v end, RoundTenth,
+    Check(COL_R, "Hide notification", "hideUIElement")
+    Row()
+    y = y - 4
+    Slider("Display Duration", 15, 60, 1, "timerDuration", Seconds, RoundWhole)
+    Slider("Scale", 0.5, 2.0, 0.1, "uiFrameScale", Plain, RoundTenth,
         function(v) iconFrame:SetScale(v) end)
-    y = y - 6
 
     Header("Totem Tracker")
     Check(COL_L, "Lock totem tracker", "totemTrackerLocked", false, function(locked)
@@ -445,31 +572,27 @@ function TNC.BuildOptionsUI()
     Check(COL_R, "Hide totem tracker", "totemTrackerHidden", false, function()
         TotemNesia.UpdateTotemTracker()
     end)
-    y = y - 30
-    Slider(0.5, 2.0, 0.1, "totemTrackerScale",
-        function(v) return "Scale: " .. v end, RoundTenth,
+    Row()
+    y = y - 4
+    Slider("Scale", 0.5, 2.0, 0.1, "totemTrackerScale", Plain, RoundTenth,
         function(v) totemTracker:SetScale(v) end)
-    y = y - 6
 
     Header("Totem Range")
-    Slider(10, 40, 1, "totemRange",
-        function(v) return "Totem Range: " .. v .. " yds" end, RoundWhole)
-    Note("The recall reminder shows when you move farther than this from your totems. With SuperWoW, totem icons also turn red when you are out of a totem's range (Searing Totem 20 yds, Magma Totem 8 yds).", 52)
+    Slider("Totem Range", 10, 40, 1, "totemRange", Yards, RoundWhole)
+    Note("The recall reminder shows when you move farther than this from your totems. With SuperWoW, totem icons also turn red when you are out of a totem's range (Searing Totem 20 yds, Magma Totem 8 yds).")
 
     Header("Enabled When In")
     Check(COL_L, "Solo", "enabledSolo")
-    Check(135, "Parties", "enabledParty")
-    Check(255, "Raids", "enabledRaid")
-    y = y - 36
+    Check(115, "Parties", "enabledParty")
+    Check(222, "Raids", "enabledRaid")
+    Row()
 
     Header("Appearance and Debug")
-    Check(COL_L, "Match pfUI style (when pfUI is installed)", "pfuiSkin")
-    y = y - 26
-    Check(COL_L, "Also style the bars and recall notification", "pfuiSkinBars")
-    y = y - 26
-    Note("Gives this window, and optionally the totem bar, tracker, and recall notification, pfUI's look. Changes take effect after a /reload.", 30)
+    Check(COL_L, "Match pfUI style on the bars", "pfuiSkinBars")
+    Row()
+    Note("When pfUI is installed, the totem bar, flyouts, totem tracker, and recall notification take pfUI's look. Takes effect after a /reload.")
     Check(COL_L, "Debug mode", "debugMode")
-    y = y - 30
+    Row()
     EndPage()
 
     -- ==================================================================
@@ -484,34 +607,34 @@ function TNC.BuildOptionsUI()
     Check(COL_R, "Lock totem bar", "totemBarLocked", false, function(locked)
         totemBar:EnableMouse(not locked)
     end)
-    y = y - 26
+    Row()
     Check(COL_L, "Disable shift for flyouts", "shiftToOpenFlyouts")
-    y = y - 36
+    Row()
 
     Header("Slots")
-    Check(COL_L, "Hide weapon enchant slot", "hideWeaponSlot", false, function()
+    Check(COL_L, "Hide weapon slot", "hideWeaponSlot", false, function()
         TotemNesia.UpdateTotemBar()
     end)
     Check(COL_R, "Hide shield slot", "hideShieldSlot", false, function()
         TotemNesia.UpdateTotemBar()
     end)
-    y = y - 26
+    Row()
     Check(COL_L, "Flash when shield is low", "shieldFlash")
-    y = y - 36
+    Row()
 
     Header("Layout")
-    MakeText(pg, "GameFontNormal", "TOPLEFT", COL_L + 4, y, "Orientation:")
-    MakeText(pg, "GameFontNormal", "TOPLEFT", COL_R + 4, y, "Flyout Direction:")
-    local layoutButton = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+    MakeText(pg, "GameFontNormalSmall", "TOPLEFT", 12, y, "Orientation")
+    MakeText(pg, "GameFontNormalSmall", "TOPLEFT", COL_R + 4, y, "Flyout Direction")
+    local layoutButton = CreateFrame("Button", NewName("Btn"), pg, "UIPanelButtonTemplate")
     layoutButton:SetWidth(140)
-    layoutButton:SetHeight(24)
-    layoutButton:SetPoint("TOPLEFT", COL_L, y - 16)
+    layoutButton:SetHeight(22)
+    layoutButton:SetPoint("TOPLEFT", pg, "TOPLEFT", 10, y - 14)
     layoutButton:SetText("Horizontal")
 
-    local flyoutButton = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+    local flyoutButton = CreateFrame("Button", NewName("Btn"), pg, "UIPanelButtonTemplate")
     flyoutButton:SetWidth(140)
-    flyoutButton:SetHeight(24)
-    flyoutButton:SetPoint("TOPLEFT", COL_R, y - 16)
+    flyoutButton:SetHeight(22)
+    flyoutButton:SetPoint("TOPLEFT", pg, "TOPLEFT", COL_R + 2, y - 14)
     flyoutButton:SetText("Up")
 
     layoutButton:SetScript("OnClick", function()
@@ -546,30 +669,28 @@ function TNC.BuildOptionsUI()
     end)
     ui.layoutButton = layoutButton
     ui.flyoutButton = flyoutButton
-    y = y - 50
-    Slider(0.5, 2.0, 0.1, "totemBarScale",
-        function(v) return "Scale: " .. v end, RoundTenth,
+    y = y - 44
+    Slider("Scale", 0.5, 2.0, 0.1, "totemBarScale", Plain, RoundTenth,
         function(v) totemBar:SetScale(v) end)
-    y = y - 6
 
     Header("Key Bindings")
-    local bindButton = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+    local bindButton = CreateFrame("Button", NewName("Btn"), pg, "UIPanelButtonTemplate")
     bindButton:SetWidth(160)
-    bindButton:SetHeight(24)
-    bindButton:SetPoint("TOPLEFT", COL_L, y)
+    bindButton:SetHeight(22)
+    bindButton:SetPoint("TOPLEFT", pg, "TOPLEFT", 10, y)
     bindButton:SetText("Key Bind Mode")
     bindButton:SetScript("OnClick", function()
         optionsMenu:Hide()  -- get the window out of the way of the totem bar
         TotemNesia.ToggleBindMode()
     end)
-    y = y - 32
-    Note("Hover a totem bar slot and press a key to bind it. Esc over a slot clears its key. Press Esc anywhere else to finish.", 30)
-    Note("Totem Sets, the Totem Bar slots, and Recast Shield can also be bound in ESC > Key Bindings > TotemNesia.", 30)
-    Note("To recall totems with a key, put this in a macro (click to select, then Ctrl-C):", 18)
+    y = y - 30
+    Note("Hover a totem bar slot and press a key to bind it. Esc over a slot clears its key. Press Esc anywhere else to finish.")
+    Note("Totem Sets, the Totem Bar slots, and Recast Shield can also be bound in ESC > Key Bindings > TotemNesia.")
+    Note("To recall totems with a key, put this in a macro (click to select, then Ctrl-C):")
     local RECALL_MACRO = "/script TotemNesia_RecallTotems()"
     local macroBox = CreateFrame("EditBox", nil, pg)
-    macroBox:SetPoint("TOPLEFT", COL_L + 4, y)
-    macroBox:SetWidth(330)
+    macroBox:SetPoint("TOPLEFT", pg, "TOPLEFT", 12, y)
+    macroBox:SetWidth(CW - 12)
     macroBox:SetHeight(20)
     macroBox:SetFontObject(GameFontHighlightSmall)
     macroBox:SetText(RECALL_MACRO)
@@ -589,31 +710,30 @@ function TNC.BuildOptionsUI()
             this:HighlightText()
         end
     end)
-    y = y - 28
-    y = y - 6
+    y = y - 26
 
     Header("How to Use")
-    Note("Hold Shift and mouse over a slot to open its flyout (unless shift is disabled above).", 30)
-    Note("Shift-click a flyout totem to cast it. Shift-right-click a flyout totem or weapon enchant to put it in the slot.", 30)
-    Note("Alt-click a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown. Alt-click it again to clear.", 30)
-    Note("Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. Right-click the earth slot to toggle Tremor mode (T). Assigning a totem to the slot turns its mode off.", 44)
-    Note("Click the shield slot, or use the Recast Shield keybind, to recast your shield.", 30)
-    Note("A red icon means you're out of that totem's range. A blue icon means you don't have the mana to cast it.", 30)
+    Note("Hold Shift and mouse over a slot to open its flyout (unless shift is disabled above).")
+    Note("Shift-click a flyout totem to cast it. Shift-right-click a flyout totem or weapon enchant to put it in the slot.")
+    Note("Alt-click a flyout totem to make it the slot's fallback, cast when the slot totem is on cooldown. Alt-click it again to clear.")
+    Note("Right-click the water slot to cycle Anti-Poison (P), Anti-Disease (D), and off. Right-click the earth slot to toggle Tremor mode (T). Assigning a totem to the slot turns its mode off.")
+    Note("Click the shield slot, or use the Recast Shield keybind, to recast your shield.")
+    Note("A red icon means you're out of that totem's range. A blue icon means you don't have the mana to cast it.")
     EndPage()
 
     -- ==================================================================
     -- Tab 3: Totem Sets
     -- ==================================================================
     local setsPage = NewPage()
-    Note("Pick a set, then click a totem in each row to assign it. A gold border marks the assigned totem. Each set has its own keybind in ESC > Key Bindings > TotemNesia.", 44)
+    Note("Pick a set, then click a totem in each row to assign it. A gold border marks the assigned totem. Each set has its own keybind in ESC > Key Bindings > TotemNesia.")
 
     Header("Set")
     local setButtons = {}
     for i = 1, 5 do
-        local btn = CreateFrame("Button", nil, setsPage, "UIPanelButtonTemplate")
+        local btn = CreateFrame("Button", NewName("Btn"), setsPage, "UIPanelButtonTemplate")
         btn:SetWidth(44)
-        btn:SetHeight(24)
-        btn:SetPoint("TOPLEFT", COL_L + (i - 1) * 52, y)
+        btn:SetHeight(22)
+        btn:SetPoint("TOPLEFT", setsPage, "TOPLEFT", 10 + (i - 1) * 52, y)
         btn:SetText(tostring(i))
         btn.setNumber = i
         btn:SetScript("OnClick", function()
@@ -624,7 +744,7 @@ function TNC.BuildOptionsUI()
         setButtons[i] = btn
     end
     setButtons[1]:LockHighlight()
-    y = y - 36
+    y = y - 30
 
     Header("Totems")
     -- One row per element: label, clear button, totem buttons
@@ -692,14 +812,14 @@ function TNC.BuildOptionsUI()
     for _, row in ipairs(setRows) do
         local element = row.element
         setTotemButtons[element] = {}
-        local label = MakeText(setsPage, "GameFontNormal", "TOPLEFT", COL_L + 4, y - 8, row.title)
+        local label = MakeText(setsPage, "GameFontNormal", "TOPLEFT", 12, y - 8, row.title)
         label:SetTextColor(row.color[1], row.color[2], row.color[3])
 
         -- Clear button
         local clearBtn = CreateFrame("Button", nil, setsPage)
         clearBtn:SetWidth(22)
         clearBtn:SetHeight(22)
-        clearBtn:SetPoint("TOPLEFT", 62, y - 3)
+        clearBtn:SetPoint("TOPLEFT", setsPage, "TOPLEFT", 58, y - 3)
         clearBtn:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
         clearBtn:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
         clearBtn:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight")
@@ -723,7 +843,7 @@ function TNC.BuildOptionsUI()
             local btn = CreateFrame("Button", nil, setsPage)
             btn:SetWidth(28)
             btn:SetHeight(28)
-            btn:SetPoint("TOPLEFT", 90 + (j - 1) * 32, y)
+            btn:SetPoint("TOPLEFT", setsPage, "TOPLEFT", 86 + (j - 1) * 32, y)
             btn:SetBackdrop(BUTTON_BACKDROP)
             btn:SetBackdropColor(row.color[1], row.color[2], row.color[3], 0.6)
             btn:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
@@ -757,8 +877,8 @@ function TNC.BuildOptionsUI()
     end
 
     Header("How Sets Cast")
-    Note("With Nampower, one press drops every totem in the set. Without Nampower, each press drops the next totem (Fire, Earth, Water, Air).", 30)
-    Note("Totems that are already down with more than 10 seconds left, and that you're still in range of, are skipped. So pressing again only replaces what's missing, expiring, or left behind.", 44)
+    Note("With Nampower, one press drops every totem in the set. Without Nampower, each press drops the next totem (Fire, Earth, Water, Air).")
+    Note("Totems that are already down with more than 10 seconds left, and that you're still in range of, are skipped. So pressing again only replaces what's missing, expiring, or left behind.")
     EndPage()
 
     -- ==================================================================
@@ -767,9 +887,9 @@ function TNC.BuildOptionsUI()
     NewPage()
 
     Header("Audio Alerts")
-    MakeText(pg, "GameFontNormal", "TOPLEFT", COL_L, y - 10, "Alert Voice:")
+    MakeText(pg, "GameFontNormalSmall", "TOPLEFT", 12, y - 8, "Voice")
     local voiceDropDown = CreateFrame("Frame", "TotemNesiaVoiceDropDown", pg, "UIDropDownMenuTemplate")
-    voiceDropDown:SetPoint("TOPLEFT", 75, y)
+    voiceDropDown:SetPoint("TOPLEFT", pg, "TOPLEFT", 30, y)
     UIDropDownMenu_SetWidth(110, voiceDropDown)
     UIDropDownMenu_Initialize(voiceDropDown, function()
         for _, name in ipairs(TNC.VOICES) do
@@ -797,175 +917,64 @@ function TNC.BuildOptionsUI()
     voiceTest:SetScript("OnClick", function()
         TotemNesia.PlayAlertSound("Totems")
     end)
-    voiceTest:SetScript("OnEnter", function()
-        TotemNesia.SetTooltipOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Test voice", 1, 1, 1)
-        GameTooltip:AddLine("Plays the Totems alert in the chosen voice", 0.6, 0.6, 0.6)
-        GameTooltip:Show()
-    end)
-    voiceTest:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-    y = y - 36
+    Tooltip(voiceTest, "Test voice", "Plays the Totems alert in the chosen voice")
+    y = y - 34
     -- Checked = the sound plays. The mute settings are stored inverted, so these boxes flip them.
     Check(COL_L, "Recall alert sound", "audioEnabled")
     Check(COL_R, "Low mana alert sound", "manaAudioMuted", true)
-    y = y - 26
+    Row()
     Check(COL_L, "Potion alert sound", "potionAudioMuted", true)
     Check(COL_R, "Aggro alert sound", "aggroAudioMuted", true)
-    y = y - 36
+    Row()
 
     Header("Mana Alerts")
-    Slider(0, 100, 5, "manaThreshold",
-        function(v) return "Low Mana Threshold: " .. v .. "%" end, RoundFive)
-    Slider(0, 100, 5, "potionThreshold",
-        function(v) return "Potion Threshold: " .. v .. "%" end, RoundFive)
-    Note("An alert plays when your mana drops below a threshold. Each alert has a 30 second cooldown and only fires when you cross below the line. Set a slider to 0% to turn that alert off.", 52)
+    Slider("Low Mana Threshold", 0, 100, 5, "manaThreshold", Percent, RoundFive)
+    Slider("Potion Threshold", 0, 100, 5, "potionThreshold", Percent, RoundFive)
+    Note("An alert plays when your mana drops below a threshold. Each alert has a 30 second cooldown and only fires when you cross below the line. Set a slider to 0% to turn that alert off.")
 
     Header("Aggro Alert")
     Check(COL_L, "Aggro alert", "aggroAlert")
-    y = y - 30
-    Note("\"You have aggro!\" on screen plus the Aggro voice when a mob stays on you for a second, in a group and in combat. Checks your group's targets, and with SuperWoW every visible nameplate (turn on enemy nameplates with V).", 52)
+    Row()
+    Note("\"You have aggro!\" on screen plus the Aggro voice when a mob stays on you for a second, in a group and in combat. Checks your group's targets, and with SuperWoW every visible nameplate (turn on enemy nameplates with V).")
 
     Header("Group Announcements")
     Check(COL_L, "Announce in parties", "publicManaParty")
     Check(COL_R, "Announce in raids", "publicManaRaid")
-    y = y - 26
+    Row()
     Check(COL_L, "Announce low mana", "manaAnnounce")
     Check(COL_R, "Announce aggro", "aggroAnnounce")
-    y = y - 26
+    Row()
     Check(COL_L, "Announce line of sight", "losAnnounce")
-    y = y - 30
-    Slider(0, 100, 5, "publicManaThreshold",
-        function(v) return "Low Mana Announcement: " .. v .. "%" end, RoundFive)
-    Note("Posted to party or raid chat, never /say, and never when solo. Low mana: \"I am low on mana, I need to drink.\" Aggro: \"I have aggro!\" (at most every 20s). Line of sight: \"<Name>, you are out of LoS for healing.\" (at most every 20s per player).", 66)
+    Row()
+    y = y - 4
+    Slider("Low Mana Announcement", 0, 100, 5, "publicManaThreshold", Percent, RoundFive)
+    Note("Posted to party or raid chat, never /say, and never when solo. Low mana: \"I am low on mana, I need to drink.\" Aggro: \"I have aggro!\" (at most every 20s). Line of sight: \"<Name>, you are out of LoS for healing.\" (at most every 20s per player).")
     EndPage()
 
     -- ------------------------------------------------------------------
     -- Refresh every control from the saved settings (runs when the window opens)
     -- ------------------------------------------------------------------
-    -- ------------------------------------------------------------------
-    -- pfUI skin: when pfUI is installed, restyle this window with pfUI's own skinning
-    -- functions so it matches the rest of the player's interface. Runs once, the first
-    -- time the window opens (by then pfUI has always finished loading). The totem bar,
-    -- tracker, and recall notification have their own skin at the end of TotemBar.lua.
-    -- ------------------------------------------------------------------
-    function ui.ApplyPfUISkin()
-        if ui.pfSkinned or not TotemNesiaCharDB.pfuiSkin then
-            return
-        end
-        if not (pfUI and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config) then
-            return
-        end
-        local api = pfUI.api
-        ui.pfSkinned = true
-
-        -- Each skin call runs on its own, so one control that won't take the skin
-        -- doesn't stop the rest of the window from being styled
-        local function Try(func, a1, a2, a3, a4, a5)
-            if not func then
-                return
-            end
-            local ok, err = pcall(func, a1, a2, a3, a4, a5)
-            if not ok then
-                TotemNesia.DebugPrint("pfUI skin error: " .. tostring(err))
-            end
-        end
-
-        -- Window, close button, and scrollbar
-        Try(api.CreateBackdrop, optionsMenu, nil, true)
-        Try(api.CreateBackdropShadow, optionsMenu)
-        Try(api.SkinCloseButton, closeButton, optionsMenu, -6, -6)
-        Try(api.CreateBackdrop, settingsScrollbar, nil, true)
-        scrollbarThumb:SetTexture(0.8, 0.8, 0.8, 0.8)
-
-        -- Tabs: flat pfUI panels in a row under the window
-        for i, tab in ipairs(tabs) do
-            tab:SetNormalTexture("")
-            tab:SetHighlightTexture("")
-            tab:SetHeight(20)
-            tab:SetWidth(90)
-            Try(api.CreateBackdrop, tab, nil, true)
-            tab:ClearAllPoints()
-            if i == 1 then
-                tab:SetPoint("TOPLEFT", optionsMenu, "BOTTOMLEFT", 0, -3)
-            else
-                tab:SetPoint("LEFT", tabs[i - 1], "RIGHT", 3, 0)
-            end
-        end
-
-        -- Controls
-        -- Checkboxes: pfUI's own SkinCheckbox puts its box on a separate frame that can
-        -- end up on top of the checkbox, hiding the check and blocking clicks. Instead the
-        -- border goes on the checkbox itself, which always draws under its check mark.
-        for _, cb in ipairs(checkboxes) do
-            cb:SetNormalTexture("")
-            cb:SetPushedTexture("")
-            cb:SetHighlightTexture("")
-            Try(api.CreateBackdrop, cb, nil, true)
-            -- Shrink the 24px button to a 16px box, keeping it centered where it was
-            local p, cx, cy = cb.anchorPoint, cb.anchorX, cb.anchorY
-            if string.find(p, "LEFT") then
-                cx = cx + 4
-            elseif string.find(p, "RIGHT") then
-                cx = cx - 4
-            end
-            if string.find(p, "TOP") then
-                cy = cy - 4
-            elseif string.find(p, "BOTTOM") then
-                cy = cy + 4
-            end
-            cb:SetWidth(16)
-            cb:SetHeight(16)
-            cb:ClearAllPoints()
-            cb:SetPoint(p, cx, cy)
-        end
-        for _, slider in ipairs(sliders) do
-            Try(api.SkinSlider, slider)
-        end
-        for i = 1, 5 do
-            Try(api.SkinButton, setButtons[i])
-        end
-        Try(api.SkinButton, layoutButton)
-        Try(api.SkinButton, flyoutButton)
-        Try(api.SkinButton, bindButton)
-        Try(api.SkinDropDown, voiceDropDown, nil, nil, nil, true)
-        -- pfUI draws the dropdown's box on a child frame of the dropdown, and a child
-        -- frame always draws on top of its parent, so the box covered the voice name
-        -- (same problem the checkboxes had). Hand the box to the page instead, one level
-        -- below the dropdown, so the name draws on top of it.
-        local box = voiceDropDown.backdrop
-        if box then
-            local page = voiceDropDown:GetParent()
-            box:SetParent(page)
-            box:SetFrameLevel(page:GetFrameLevel())
-            -- With pfUI's Blizzard-style borders on, the border is one more frame on top
-            if voiceDropDown.backdrop_border then
-                voiceDropDown.backdrop_border:SetFrameLevel(page:GetFrameLevel())
-            end
-        end
-    end
-
     function ui.RefreshAll()
-        ui.ApplyPfUISkin()
         for _, cb in ipairs(checkboxes) do
             local value = TotemNesiaCharDB[cb.dbKey]
             if cb.invert then
                 value = not value
             end
-            cb:SetChecked(value)
+            cb:SetChecked(value and 1 or nil)
         end
         for _, slider in ipairs(sliders) do
             local value = TotemNesiaCharDB[slider.dbKey]
             if value then
+                slider.loading = true
                 slider:SetValue(value)
-                slider.label:SetText(slider.format(value))
+                slider:ShowValue(value)
+                slider.loading = nil
             end
         end
         layoutButton:SetText(TotemNesiaCharDB.totemBarLayout or "Horizontal")
         flyoutButton:SetText(TotemNesiaCharDB.totemBarFlyoutDirection or "Up")
         UIDropDownMenu_SetText(TotemNesiaCharDB.alertVoice or "Jenny", voiceDropDown)
-        SelectTab(1)
+        SelectTab(ui.currentTab or 1)
     end
 end
 
@@ -977,7 +986,7 @@ function TotemNesia.UpdateMinimapButton()
     local x = math.cos(angle) * 80
     local y = math.sin(angle) * 80
     minimapButton:SetPoint("CENTER", Minimap, "CENTER", x, y)
-    
+
     -- Ensure button is visible unless explicitly hidden
     if not TotemNesiaCharDB.minimapHidden then
         minimapButton:Show()
@@ -1002,8 +1011,9 @@ function TotemNesia.ToggleOptions()
     if optionsMenu:IsVisible() then
         optionsMenu:Hide()
     else
-        TNC.ui.RefreshAll()
+        optionsMenu:SetScale(TotemNesiaCharDB.optionsScale or 1)
         optionsMenu:Show()
+        TNC.ui.RefreshAll()
     end
 end
 
@@ -1037,7 +1047,7 @@ minimapButton:SetScript("OnDragStart", function()
         local px, py = GetCursorPosition()
         local scale = Minimap:GetEffectiveScale()
         px, py = px / scale, py / scale
-        
+
         local angle = math.deg(math.atan2(py - my, px - mx))
         TotemNesiaCharDB.minimapPos = angle
         TotemNesia.UpdateMinimapButton()

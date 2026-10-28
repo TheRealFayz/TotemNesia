@@ -68,7 +68,7 @@ A small bar that shows every active totem with its timer. It can be moved, locke
 
 ## Settings and Keybinds
 
-Click the minimap button or type `/tn` to open the settings window (right-click and drag to move the button). `/tn bind` starts Key Bind Mode.
+Click the minimap button or type `/tn` to open the settings window (right-click and drag to move the button). The tabs are the icons down the right side of the window. `/tn bind` starts Key Bind Mode.
 
 Everything is saved per character, so each Shaman keeps their own totem sets, bar setup, and settings. The first time a character logs in after updating from 2.0, it starts with a copy of your old settings.
 
@@ -84,7 +84,7 @@ Keybinds are in ESC > Key Bindings > TotemNesia: Totem Set 1-5, Totem Bar 1-4, a
 TotemNesia works on a plain client. These add extras when installed:
 
 - **Nampower** - One-press totem sets. If Nampower's instant spell queuing is off, TotemNesia turns it on for that key press and puts your setting back right after.
-- **pfUI** - The settings window, totem bar, flyouts, totem tracker, and recall notification match pfUI's look. Each part can be turned off under General > Appearance.
+- **pfUI** - The totem bar, flyouts, totem tracker, and recall notification match pfUI's look. Turn it off with "Match pfUI style on the bars" on the General tab.
 - **SuperWoW** - Exact distance to each totem (without it, range is judged by whether the totem's buff is still on you), and an aggro alert that can see mobs nobody has targeted (enemy nameplates need to be on)
 
 ## For Developers

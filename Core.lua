@@ -414,11 +414,8 @@ function TotemNesia.InitDB()
         TotemNesiaCharDB.manaAnnounce = true
     end
     TotemNesiaCharDB.onePressWithoutNampower = nil  -- removed experimental setting
-    if TotemNesiaCharDB.pfuiSkin == nil then
-        TotemNesiaCharDB.pfuiSkin = true  -- match pfUI's look when pfUI is installed
-    end
     if TotemNesiaCharDB.pfuiSkinBars == nil then
-        TotemNesiaCharDB.pfuiSkinBars = true  -- also restyle the bars and recall notification
+        TotemNesiaCharDB.pfuiSkinBars = true  -- give the bars and recall notification pfUI's look
     end
     
     -- Initialize totem sets (5 sets)
@@ -879,10 +876,10 @@ end
 -- ----------------------------------------------------------------------------
 -- pfUI bar style helpers (the skinning itself is at the end of TotemBar.lua)
 -- ----------------------------------------------------------------------------
--- True when the bars should take pfUI's look: pfUI is loaded and both Appearance
--- options are on
+-- True when the bars should take pfUI's look: pfUI is loaded and "Match pfUI style on
+-- the bars" is on
 function TNC.BarsUsePfUI()
-    return TotemNesiaCharDB and TotemNesiaCharDB.pfuiSkin and TotemNesiaCharDB.pfuiSkinBars
+    return TotemNesiaCharDB and TotemNesiaCharDB.pfuiSkinBars
         and pfUI and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config and true or false
 end
 

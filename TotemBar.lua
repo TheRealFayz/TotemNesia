@@ -1245,7 +1245,7 @@ end)
 -- ============================================================================
 -- PFUI BAR STYLE
 -- ============================================================================
--- When pfUI is installed (and both Appearance options are on), the totem bar, its
+-- When pfUI is installed (and "Match pfUI style on the bars" is on), the totem bar, its
 -- flyouts, the totem tracker, and the recall notification take pfUI's panels, borders,
 -- shadows, and font. Layout, sizes, and every meaningful color (red out of range, blue
 -- no mana, grey missing enchant/shield, shield flash, flyout hover) stay the same.

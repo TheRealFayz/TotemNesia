@@ -13,12 +13,12 @@ Type `/tn` to open the settings window, or `/tn bind` to start Key Bind Mode.
 
 **The notification never appears**
 - You need to be level 10 and have learned Totemic Recall
-- Check that "Hide recall notification" is off (General tab)
+- Check that "Hide notification" is off (General tab, Recall Notification)
 - Check "Enabled When In" on the General tab for your current group type (solo, party, raid)
 - Make sure you actually had totems down
 
 **Clicking the notification does nothing**
-- "Lock recall notification" must be on (General tab). While it's unlocked, the notification can be dragged instead of clicked.
+- "Lock notification" must be on (General tab, Recall Notification). While it's unlocked, the notification can be dragged instead of clicked.
 
 ## Totem Sets
 
@@ -65,8 +65,9 @@ Type `/tn` to open the settings window, or `/tn bind` to start Key Bind Mode.
 
 ## Appearance
 
-**The window or bars don't match pfUI, or I want the old look back**
-- Use the two pfUI boxes under General > Appearance and Debug, then `/reload`
+**The bars don't match pfUI, or I want the old look back**
+- Use "Match pfUI style on the bars" under General > Appearance and Debug, then `/reload`
+- The settings window always keeps its own look
 
 ## Reporting a Bug
 
