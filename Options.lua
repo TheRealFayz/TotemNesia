@@ -15,19 +15,24 @@ local totemBar = S.totemBar
 local totemTracker = S.totemTracker
 
 local LOGO = "Interface\\AddOns\\TotemNesia\\Textures\\Logo"
+local LOGO_RING = "Interface\\AddOns\\TotemNesia\\Textures\\LogoRing"
 
 -- ============================================================================
 -- SPINNING LOGO
 -- ============================================================================
--- The logo on the settings window and the minimap button does one quick spin every
--- SPIN_EVERY seconds. WoW 1.12 has no texture rotation, so the spin turns the texture
--- coordinates instead. Logo.tga keeps the art inside the middle of the image, so the
--- turned coordinates never reach past its edges and the corners stay clear.
-local SPIN_EVERY = 3     -- seconds from the start of one spin to the start of the next
-local SPIN_TIME = 0.6    -- how long a spin takes
+-- The logo on the settings window and the minimap button is two textures: the emblem
+-- (Logo.tga) and the red ring around it (LogoRing.tga). On the settings window the ring
+-- turns all the time, and every time it comes back around to the top the emblem does
+-- one quick spin. On the minimap button the ring stays still and the emblem spins on the
+-- same beat. WoW 1.12 has no texture rotation, so both turn their texture coordinates
+-- instead. The .tga files keep the art inside the middle of the image, so the turned
+-- coordinates never reach past its edges.
+local RING_TURN = 3      -- seconds for the ring to go all the way around (one emblem spin each)
+local SPIN_TIME = 0.6    -- how long an emblem spin takes
 local SPIN_K = 0.35355   -- half the diagonal of the visible square, in texture units
 local spinTextures = {}
-local spinClock = 0
+local ringTextures = {}
+local ringClock = 0
 local spinResting = false
 
 local function SetLogoAngle(tex, a)
@@ -42,8 +47,15 @@ end
 
 local spinFrame = CreateFrame("Frame")
 spinFrame:SetScript("OnUpdate", function()
-    spinClock = math.mod(spinClock + (arg1 or 0), SPIN_EVERY)
-    local t = spinClock / SPIN_TIME
+    -- The ring: a steady clockwise turn
+    ringClock = math.mod(ringClock + (arg1 or 0), RING_TURN)
+    local ringAngle = -2 * math.pi * ringClock / RING_TURN
+    for i = 1, table.getn(ringTextures) do
+        SetLogoAngle(ringTextures[i], ringAngle)
+    end
+
+    -- The emblem: a quick spin each time the ring starts a new turn, then a rest
+    local t = ringClock / SPIN_TIME
     if t < 1 then
         -- Ease in and out, one full turn clockwise
         local eased = t * t * (3 - 2 * t)
@@ -80,6 +92,10 @@ minimapIcon:SetPoint("CENTER", minimapButton, "CENTER", 0, 0)
 minimapIcon:SetTexture(LOGO)
 SetLogoAngle(minimapIcon, 0)
 table.insert(spinTextures, minimapIcon)
+local minimapRing = minimapButton:CreateTexture(nil, "OVERLAY")
+minimapRing:SetAllPoints(minimapIcon)
+minimapRing:SetTexture(LOGO_RING)
+SetLogoAngle(minimapRing, 0)  -- the ring only turns on the settings window
 
 -- ============================================================================
 -- SETTINGS WINDOW
@@ -125,6 +141,11 @@ portrait:SetAllPoints(portraitFrame)
 portrait:SetTexture(LOGO)
 SetLogoAngle(portrait, 0)
 table.insert(spinTextures, portrait)
+local portraitRing = portraitFrame:CreateTexture(nil, "OVERLAY")
+portraitRing:SetAllPoints(portraitFrame)
+portraitRing:SetTexture(LOGO_RING)
+SetLogoAngle(portraitRing, 0)
+table.insert(ringTextures, portraitRing)
 
 -- Title, a little right of center to balance the logo
 local menuTitle = optionsMenu:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
